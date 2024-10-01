@@ -6,7 +6,8 @@ elif INDEX_T_BOX == "FAISS":
     from index.vector_distance_index import TBoxIndex
 elif INDEX_T_BOX == "SPOTLIGHT":
     from index.spotlight import TBoxIndex
-
+elif INDEX_A_BOX == "WEAVIATE":
+    from index.weaviate import TBoxIndex
 #Import A-Box index
 if INDEX_A_BOX == "WHOOSH":
     from index.whoosh_index import ABoxIndex

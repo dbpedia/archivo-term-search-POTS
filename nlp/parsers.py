@@ -35,14 +35,17 @@ def parseText(text,index,normalizer,endpoint):
         if index.type == "WHOOSH":
             # print("normalizou")
             text = normalizer.normalizeSentece(text)
-        matchs = []
-        sentences = sent_tokenize(text)
-        for sentence in sentences:
-            matchs+=  parser_sentence(sentence,index,endpoint)
-        for match in matchs:
-            if not match['content']["?term"] in terms_already_seen:
-                results.append(match)
-                terms_already_seen.add(match['content']["?term"])
+        if index.type == "FAISS":
+            matchs = []
+            sentences = sent_tokenize(text)
+            for sentence in sentences:
+                matchs+=  parser_sentence(sentence,index,endpoint)
+            for match in matchs:
+                if not match['content']["?term"] in terms_already_seen:
+                    results.append(match)
+                    terms_already_seen.add(match['content']["?term"])
+        if index.type == "WEAVIATE":
+            pass
     return results
 
 def tokenize_sentence(sentence):
