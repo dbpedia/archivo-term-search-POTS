@@ -7,7 +7,8 @@ from VectorDB_creation_aux import *
 from dotenv import load_dotenv
 import os
 import traceback
-
+from dataclasses import dataclass, field
+from typing import List
 load_dotenv()
 
 wcd_url = os.getenv("WCD_URL")
@@ -34,7 +35,11 @@ def class_collection_creation():
 
     # Languages to consider
     languages = ["en", "fr", "None"]
+    
 
+    
+#    relationship_properties = {"SuperClass": copy_over_superclass_vectors}
+    
     # All combinations between models, methodologies and languages
     all_combos = []
     for model in models:
@@ -87,6 +92,10 @@ def class_collection_creation():
     # Configurations for custom vectorizers (one for every case)
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
 
+    # TODO: Define new vectors
+    # parentClassC
+    {properties : copy_relation}
+    
     if create_new:
         # Delete the last iteration of the collection (for testing purposes)
         client.collections.delete("Classes")

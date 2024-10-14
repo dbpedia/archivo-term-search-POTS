@@ -23,10 +23,10 @@ from typing import List
 @dataclass
 class ResultDocument:
     termIRI: str = "None"
-    RDF_type: str = "None"
+    rdfType: str = "None"
     label: str = "None"
     description: str = "None"
-    language: str = "None"
+    #language: str = "None"
     ontology: str = "None"
 
 # Individual class inheriting from ResultDocument
@@ -41,15 +41,21 @@ class Class(ResultDocument):
     subclass: List[str] = field(default_factory=list)
     superclass: List[str] = field(default_factory=list)
 
+"Creative Work"
+["Work"] -> [namedVector["Work"]]
 # DatatypeProperty class inheriting from ResultDocument
 @dataclass
 class DatatypeProperty(ResultDocument):
+    subProperty : List[str] = field(default_factory=list)
+    superProperty  : List[str] = field(default_factory=list)
     domain: List[str] = field(default_factory=list)
     range: List[str] = field(default_factory=list)
 
 # ObjectProperty class inheriting from ResultDocument
 @dataclass
 class ObjectProperty(ResultDocument):
+    subProperty : List[str] = field(default_factory=list)
+    superProperty : List[str] = field(default_factory=list)
     domain: List[str] = field(default_factory=list)
     range: List[str] = field(default_factory=list)
 
