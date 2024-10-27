@@ -6,7 +6,7 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 # Gets data from the sparql endpoint
 # Results come in the format [Term, Label, Description, Domain, Range, Language]
 # Results are "None", when applicable, except Label, where it will try to create one
-def get_data(url_endpoint, type="object_properties"):
+def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
     func_dict = {
         "data_properties": get_data_properties,
         "object_properties": get_object_properties,
@@ -24,9 +24,9 @@ from typing import List
 class ResultDocument:
     termIRI: str = "None"
     rdfType: str = "None"
-    label: str = "None"
+    label: list[str] = field(default_factory=list)
     description: str = "None"
-    #language: str = "None"
+    language: str = "None"
     ontology: str = "None"
 
 # Individual class inheriting from ResultDocument
@@ -41,8 +41,8 @@ class Class(ResultDocument):
     subclass: List[str] = field(default_factory=list)
     superclass: List[str] = field(default_factory=list)
 
-"Creative Work"
-["Work"] -> [namedVector["Work"]]
+# "Creative Work"
+# ["Work"] -> [namedVector["Work"]]
 # DatatypeProperty class inheriting from ResultDocument
 @dataclass
 class DatatypeProperty(ResultDocument):
