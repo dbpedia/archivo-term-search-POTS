@@ -15,8 +15,9 @@ wcd_url = os.getenv("WCD_URL")
 wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
-url_endpoint = "http://95.217.207.179:8995/sparql/"
-
+url_endpoint =  os.getenv("SPARQL_ENDPOINT")
+local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 
 # def class_collection_creation():
 #     # Get ontology property data from endpoint
@@ -966,8 +967,8 @@ headers = {
 }
 client = weaviate.connect_to_local(
     
-    port=8011,
-    grpc_port=50051,
+    port=local_weaviate_port,
+    grpc_port=local_weaviate_port_grpc,
     headers=headers
     
 )

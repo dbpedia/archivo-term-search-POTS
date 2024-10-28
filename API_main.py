@@ -22,15 +22,16 @@ wcd_url = os.getenv("WCD_URL")
 wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
-url_endpoint = "http://95.217.207.179:8995/sparql/"
+local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 # Create a client instance
 headers = {
     "X-HuggingFace-Api-Key": hf_key,
 }
 client = weaviate.connect_to_local(
     
-    port=8085,
-    grpc_port=50051,
+    port=local_weaviate_port,
+    grpc_port=local_weaviate_port_grpc,
     headers=headers
 
 )
