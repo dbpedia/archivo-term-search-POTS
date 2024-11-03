@@ -1,0 +1,18 @@
+version: '2.4'
+
+services:
+
+#overwrite local copy of image live with state of the code without need to rebuild image (setup the environment)
+  indexer:
+    build:
+      args:
+        CODE_ORIGIN: copy_local
+    volumes:
+      - ./onto-search:/onto-search
+
+  api:
+    build:
+      args:
+        CODE_ORIGIN: copy_local
+    volumes:
+      - ./onto-search:/onto-search
