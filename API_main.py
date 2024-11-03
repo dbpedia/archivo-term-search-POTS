@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 import weaviate
 import weaviate.classes as wvc
-from weaviate.classes.query import Filter, TargetVectors
+from weaviate.classes.query import Filter, TargetVectors, MetadataQuery
 from weaviate.util import generate_uuid5
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from VectorDB_creation_aux import *
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 
-
+# TODO: Uncomment below
 app = Flask(__name__)
 
 # Enable CORS for all routes
@@ -24,6 +24,9 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
 local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE")
+DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT"))
+
 # Create a client instance
 headers = {
     "X-HuggingFace-Api-Key": hf_key,
@@ -39,17 +42,79 @@ client = weaviate.connect_to_local(
 create_new = False
 
 models = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
-model_name = models[0]
 
-# Mappings between model names (formatted to _ format) and model instances
+
+# # Mappings between model names (formatted to _ format) and model instances
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in models}
+
+
+collections = ['DataProperties', 'ObjectProperties', 'Classes', 'Individuals', 'RDFtypes'] # TODO: Add "Ontologies"
+collections_translation = {
+    'DataProperty': 'DataProperties',
+    'ObjectProperty': 'ObjectProperties',
+    'Class': 'Classes',
+    'Individual': 'Individuals',
+    'RDFtype': 'RDFtypes'
+}
+
+
+def validate_filters(data):
+    # Check for fuzzy filters
+    fuzzy_filters = data.get("fuzzy_filters")
+    fuzzy_filters_config = data.get("fuzzy_filters_config")
+    exact_filters = data.get("exact_filters")
+    
+    
+    # Check if either fuzzy or exact filters are present
+    if not fuzzy_filters and not exact_filters:
+        return False, "At least one of 'fuzzy_filters' or 'exact_filters' must be provided."
+    
+    # Validate fuzzy filters
+    if fuzzy_filters:
+        if not isinstance(fuzzy_filters, dict):
+            return False, "'fuzzy_filters' must be a dictionary."
+        
+        if fuzzy_filters_config:
+            valid_fuzzy_config_keys = ["model_name", "lang", "hybrid_search_field"]
+            for key in fuzzy_filters_config:
+                if key not in valid_fuzzy_config_keys:
+                    return False, f"Invalid key in 'fuzzy_filters_config': '{key}'. Valid keys: {valid_fuzzy_config_keys}"
+        else:
+            return False, "'fuzzy_filters_config' must be passed when passing 'fuzzy_filters'."
+        
+        valid_fuzzy_keys = ["label", "description", "superclass", "sublcass", "domain", "range"] # TODO: This should be collection-sensitive
+        for key in fuzzy_filters:
+            if key not in valid_fuzzy_keys:
+                return False, f"Invalid key in 'fuzzy_filters': '{key}'. Valid keys: {valid_fuzzy_keys}"
+    
+    # Validate exact filters
+    if exact_filters:
+        if not isinstance(exact_filters, dict):
+            return False, "'exact_filters' must be a dictionary."
+            
+        # Check datatype value
+        datatype_value = exact_filters.get("termtype")
+        if not datatype_value in collections_translation:
+            return False, f"Invalid value for exact_filter['datatype']: '{datatype_value}'. Valid values: {list(collections_translation.keys())}"
+        else:
+            translation = collections_translation[datatype_value]
+            valid_exact_keys = [x.name for x in client.collections.get(name=translation).config.get().properties]
+
+            for key in exact_filters:
+                if key not in valid_exact_keys and key != "termtype":
+                    return False, f"Invalid key in 'exact_filters': '{key}'. Valid keys: {valid_exact_keys}"
+    
+        # TODO: check which keys are passed and see if they make sense
+            
+
+    return True, ""
 
 def build_filters(filtersDict):
     combined_filter = None
 
     # Loop through the dictionary and create filters
     for key, value in filtersDict.items():
-        if key != "datatype" and key != "language":
+        if key != "termtype" and key != "language":
             # Depending on your key names, choose the correct filter type
             current_filter = Filter.by_property(key).equal(value)
             
@@ -60,244 +125,219 @@ def build_filters(filtersDict):
                 combined_filter = combined_filter & current_filter
     return combined_filter
 
-# Main search function logic
-def search(model_name, query_dict):
-    collections = {
-        "data_property": "DataProperties",
-        "object_property": "ObjectProperties",
-        "individual": "Individuals",
-        "class": "Classes",
-        "RDF_type": "RDF_types"
-    }
-
-
-    # Extract filters and injections from the query_dict
-    filters = query_dict.get("filters", {})
-    injections = query_dict.get("context", {})
+def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, desired_language, limit):
     
-    language = filters.get("language", "None")
+    for x in signature_properties_to_consider:
+        print("Embedding", signature_properties_to_consider[x], "to originals")
+        
+    for x in reference_properties_to_consider:
+        print("Embedding", reference_properties_to_consider[x], "to copies")
     
+    signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
+    reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
     
-    print("LANG:", language)
-    
-    # Build filters (this function should be defined based on your actual filter structure)
-    filters_built = build_filters(filters)
+    # print(signature_property_embeddings)
+    # print(reference_property_embeddings)
+    # Get the collection object from the client (Assuming `client` is properly initialized)
+    collection = client.collections.get(name=collections_translation[target_collection])
+    named_vectors = collection.config.get().vector_config.keys()
+    #print("All possible named vectors:", named_vectors)
 
-    try:
-        # Embed query term or use injections
-        if injections:
-            vectorized_input = {model_name + "___" + i.capitalize() + f"___{language}": models[model_name].embed_query(injections[i]) for i in injections}
-            #print("Query vector models:", vectorized_input.keys())
-            vectorized_input = {k: vectorized_input[k] for k in vectorized_input if k.endswith("___"+language)}
-            
-            #print("VI after filter:", vectorized_input)
-        else:
-            vectorized_input = models[model_name].embed_query(query_dict["term"])
-            #print("Query vector models: only one")
-        
-        results = {}
-
-        # Check if filters include a specific datatype
-        if "datatype" in filters:
-            collection_name = collections.get(filters["datatype"])
-            
-            if injections:
-                collection = client.collections.get(name=collection_name)
-                named_vectors = collection.config.get().vector_config.keys()
-                for named_vector in named_vectors:
-                    if not named_vector in vectorized_input:
-                        vectorized_input[named_vector] = models[model_name].embed_query(query_dict["term"])
-                vectorized_input = {k: vectorized_input[k] for k in vectorized_input if k in named_vectors and k.split("___")[0] == model_name and k.split("___")[-1] == language}
-                    
-            if collection_name:
-                results[collection_name] = search_collection(collection_name, model_name, query_dict, vectorized_input, filters_built, injections)
-                
-            else:
-                return {"error": f"Unknown datatype: {filters['datatype']}"}, 400
-        else:
-            # No datatype specified, search all collections
-            for collection_name in collections.values():
-                
-                collection = client.collections.get(name=collection_name)
-                named_vectors = collection.config.get().vector_config.keys()
-                
-                #print(collection_name, named_vectors)
-                if injections:
-                    collection = client.collections.get(name=collection_name)
-                    named_vectors = collection.config.get().vector_config.keys()
-                    for named_vector in named_vectors:
-                        if not named_vector in vectorized_input:
-                            vectorized_input[named_vector] = models[model_name].embed_query(query_dict["term"])
-                    vectorized_input = {k: vectorized_input[k] for k in vectorized_input if k in named_vectors and k.split("___")[0] == model_name and k.split("___")[-1] == language}
-                results[collection_name] = search_collection(collection_name, model_name, query_dict, vectorized_input, filters_built, injections)
-            
-        return {"results": results}, 200
-
-    except Exception as e:
-        # Handle and return detailed error
-        return {"error": str(e), "traceback": traceback.format_exc()}, 500
-
-def log_search_params(collection_name, model_name, query_dict, vectorized_input, filters_built, injections, filename="search_log.txt"):
-    """
-    Logs search parameters to a file, checking if any parameter is a dictionary before logging.
-    """
-    with open(filename, "a") as log_file:
-        log_file.write(f"Search timestamp: {datetime.now()}\n")
-        log_file.write(f"Collection Name: {collection_name}\n")
-        log_file.write(f"Model Name: {model_name}\n")
-        
-
-        log_file.write(f"Query Dict: {query_dict}\n")
-        
-        # Check if vectorized_input is a dict and log appropriately
-        if isinstance(vectorized_input, dict):
-            log_file.write(f"Vectorized Input Keys: {list(vectorized_input.keys())}\n")
-        else:
-            log_file.write(f"Vectorized Input: Single vector\n")
-        
-        # Log filters and injections
-        log_file.write(f"Filters: {filters_built}\n")
-        log_file.write(f"Injections: {injections}\n")
-        log_file.write("-" * 50 + "\n")
-
-def search_collection(collection_name, model_name, query_dict, vectorized_input, filters_built, injections, log_file="search_log.txt"):
-    """
-    Helper function to search within a specific collection and log the search parameters.
-    """
-    results = []
-    try:
-        # Log search parameters to file
-        log_search_params(collection_name, model_name, query_dict, vectorized_input, filters_built, injections, log_file)
-
-        # Get the collection object from the client (Assuming `client` is properly initialized)
-        collection = client.collections.get(name=collection_name)
-        named_vectors = collection.config.get().vector_config.keys()
-
-        # "term":  "abc"
-        # "model": "model1"
-        # "strategy"
-        
-        # Handle vectorization and decide which vectors to use based on injections
-        if injections:
-            
-            # TODO: references["domain"].namedVectors["label"]
-            # reference name and namedvector name of the target reference
-            
-            target_vectors = list(vectorized_input.keys())
-            
-            # context: {"domain": "something"}
-            # model1_domain, model1_domainplus_range
-            inj_vectors = []
-            search_term_vectors = []
-            for vec in target_vectors:
-                for inj in injections:
-                    if inj.capitalize() in vec.split("___")[1]:
-                        inj_vectors.append(vec)
+    #print(named_vectors)
+    named_vectors_to_search = {}
+    for vector_name in named_vectors:
+        #print(vector_name)
+        if "___CP_SEPARATOR___" in vector_name:
+            if reference_properties_to_consider:
+                original_vector, copy_vector_info = vector_name.split("___CP_SEPARATOR___")
+                property_to_find, target_collection, index = copy_vector_info.split("___")
+                vectorizer, prop, language = original_vector.split("___")
+                # print(vectorizer, model_name, vectorizer == model_name)
+                # print(language, desired_language, language == desired_language)
+                # print(property_to_find, reference_properties_to_consider, property_to_find in reference_properties_to_consider)
+                #print(property_to_find, reference_properties_to_consider, property_to_find in reference_properties_to_consider)
+                if vectorizer == model_name and language == desired_language and property_to_find in reference_properties_to_consider:
+                    if signature_properties_to_consider:
+                        if prop in signature_properties_to_consider:
+                            
+                            named_vectors_to_search[vector_name] = reference_property_embeddings[property_to_find]
                     else:
-                        search_term_vectors.append(vec)
-            
-            total = 1000
-            weighted_target_vector_dict = {}
-            for inj_vec in inj_vectors:
-                weighted_target_vector_dict[inj_vec] = int(total / 2)
-            for search_vec in search_term_vectors:
-                weighted_target_vector_dict[search_vec] = int(total / 2 )
-            print(weighted_target_vector_dict)
-            
-            target_vectors = TargetVectors.manual_weights(weighted_target_vector_dict)
-            
+                        named_vectors_to_search[vector_name] = reference_property_embeddings[property_to_find]
         else:
-            target_vectors = [x for x in named_vectors if model_name in x]
+            
+            vectorizer, prop, language = vector_name.split("___")
+            # print(vectorizer, model_name, vectorizer == model_name)
+            # print(language, desired_language, language == desired_language)
+            # print(prop, signature_properties_to_consider, prop in signature_properties_to_consider)
+            if vectorizer == model_name and language == desired_language and prop in signature_properties_to_consider:
+                #print("Embedding", prop, "and adding", vector_name, "to list")
+                named_vectors_to_search[vector_name] = signature_property_embeddings[prop]
+    
+    
+    
+    target_vectors = list(named_vectors_to_search.keys())
+    #print("Searching in", target_vectors)
+    if signature_properties_to_consider and reference_properties_to_consider:
+        target_vectors = TargetVectors.relative_score({x: (0.5 if "___CP_SEPARATOR___" not in x else 0.33 ) for x in target_vectors})
+        
+    print("Target vectors:", target_vectors)
+    #print(named_vectors_to_search)
+    #print("Near vector input:", named_vectors_to_search)
+    #print("Target vectors:", target_vectors)
+    results = collection.query.near_vector(
+            near_vector=named_vectors_to_search,
+            target_vector=target_vectors,
+            filters=built_filters,
+            limit=limit, #TODO: PASS LIMIT
+            return_metadata=MetadataQuery(distance=True)
+        ).objects
+        
+    
+    return [(x.properties["label"], x.properties["termIRI"], x.properties["domain"], x.properties["range"], x.metadata.distance) for x in results]
+        
+    # except Exception as e:
+    #     print(e)
+    
 
-        # Perform the query on the collection using the vector embeddings and filters
-        if query_dict.get("hybrid", None) == "True":
-            search_results = collection.query.hybrid(
-                vector=vectorized_input,
-                target_vector=target_vectors,
-                filters=filters_built,
-                limit=3
-            ).objects
-        else:
-            search_results = collection.query.near_vector(
-                near_vector=vectorized_input,
-                target_vector=target_vectors, # ref
-                filters=filters_built,
-                limit=3
-            ).objects
+def pure_exact_search(exact_filters):
+    filters = build_filters(exact_filters)
+    
+    target_collections = collections
+    if "termtype" in exact_filters:
+        target_collections = [exact_filters["termtype"]]
+        
+    results = {}
+    
+    for collection_name in target_collections:
+        collection_name = collections_translation[collection_name]
 
-        # Collect the results
-        for result in search_results:
-            results.append(result.properties["term"])
-
-    except Exception as e:
-        print(f"Error querying {collection_name}: {e}")
-
+        results[collection_name] = [x.properties for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters).objects]
+        
     return results
+        
 
-def validate_filters_context(datatype, data):
-    # Extract filters and context from data
-    filters = data.get("filters", {})
-    context = data.get("context", {})
-    collections = {
-        "data_property": "DataProperties",
-        "object_property": "ObjectProperties",
-        "individual": "Individuals",
-        "class": "Classes",
-        "RDF_type": "RDF_types"
-    }
-    VALID_FILTERS_CONTEXT = {
-        "Classes": ["ontology", "label", "description", "subclass", "superclass", "language"],
-        "RDF_types": ["ontology", "label", "description", "superclass", "language"],
-        "Individuals": ["ontology", "label", "description", "domain", "range", "language"],
-        "ObjectProperties": ["ontology", "label", "description", "domain", "range", "language"],
-        "DataProperties": ["ontology", "label", "description", "domain", "range", "language"],
-        "Language": ["en", "fr", "None"]
-    }
-    # Get the valid keys for the given datatype
-    try:
-        valid_keys = VALID_FILTERS_CONTEXT.get(collections[datatype])
-    except:
-        return False, f"Invalid datatype '{datatype}'. Available datatypes: {list(collections.keys())}"
-    # Check if the datatype is valid and the provided filters/context are valid
-    if valid_keys:
-        # Check filters
-        for key in filters:
-            if key != "datatype":
-                if key not in valid_keys:
-                    return False, f"Invalid filter '{key}' for datatype '{datatype}. Valid filters: {valid_keys}"
-
-        # Check context
-        for key in context:
-            if key not in valid_keys:
-                return False, f"Invalid context '{key}' for datatype '{datatype}. Valid filters: {valid_keys}"
+def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_property, language, limit):
+    
+    target_collection = None
+    built_filters = None
+    
+    if exact_filters:
+        target_collection = exact_filters.get("termtype")
+    
+        built_filters = build_filters(exact_filters)
+    
+    signature_properties = ["Label", "Description"]
+    
+    reference_properties = ["Domain", "Range", "Subclass", "Superclass"]
+    
+    signature_properties_to_consider = {x.capitalize(): fuzzy_filters[x] for x in fuzzy_filters if x.capitalize() in signature_properties}
+    
+    reference_properties_to_consider = {x.capitalize(): fuzzy_filters[x] for x in fuzzy_filters if x.capitalize() in reference_properties}
+    
+    # Ex:
+    model_name = fuzzy_filters_config.get("model_name")
+    
+    results = {}
+    if target_collection:
+        print("Getting", signature_properties_to_consider, reference_properties_to_consider, "from", target_collection)
+        results[target_collection] = query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
+    
     else:
-        return False, f"Invalid datatype '{datatype}'"
+        for collection_name in collections_translation:
+            results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
+    
+    return results
+    
 
-    return True, ""
+def search(data):
+    fuzzy_filters = data.get("fuzzy_filters")
+    fuzzy_filters_config = data.get("fuzzy_filters_config")
+    exact_filters = data.get("exact_filters")
+    language = data.get("language", DEFAULT_LANGUAGE)
+    limit = data.get("limit", DEFAULT_LIMIT)
+    
+    # PURE FUZZY SEARCH
+    if fuzzy_filters:
+        
+        hybrid_search_field = fuzzy_filters_config.get("hybrid_search_field")
+        
+            # PURE FUZZY SEARCH
+        results = fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_search_field, language, limit)
+            
+       
+    else:    
+        
+        # PURE EXACT SEARCH
+        results = pure_exact_search(exact_filters)
+        
+        
+    for x in results:
+        print(x, "---------------------")
+        if results[x]:
+            for y in results[x]:
+                print(y)
 
-@app.route('/search', methods=['POST'])
-def search_endpoint():
-    data = request.json
-    model_name = data.get("model_name")
-    term = data.get("term")
 
-    # Validate required parameters
-    if not model_name or not term:
-        return jsonify({"error": "Missing required parameters: 'model_name' or 'term'"}), 400
+print("FIRST")
 
-    # Get datatype from filters if provided
-    datatype = data.get("filters", {}).get("datatype")
+data = {
 
-    # If datatype is provided, validate filters and context
-    if datatype:
-        is_valid, error_message = validate_filters_context(datatype, data)
-        if not is_valid:
-            return jsonify({"error": error_message}), 400
+    "fuzzy_filters": {"label": "date"},#,, "domain": "artist", "range": "Date"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},
+    "exact_filters": {"termtype": "ObjectProperty"}
+}
+valid, error_message = validate_filters(data)
 
-    # Proceed with search operation
-    results, status_code = search(model_name, data)
-    return jsonify(results), status_code
+if valid:
+    results = search(data)
+else:
+    print(error_message)
+    
+print()
+print("SECOND")
+data = {
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=9090)
+    "fuzzy_filters": {"label": "date", "domain": "person"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},
+    "exact_filters": {"termtype": "ObjectProperty"}
+}
+valid, error_message = validate_filters(data)
+
+if valid:
+    results = search(data)
+else:
+    print(error_message)
+    
+print()
+print("THIRD")
+data = {
+
+    "fuzzy_filters": {"label": "date", "domain": "musical work"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},
+    "exact_filters": {"termtype": "ObjectProperty"}
+}
+valid, error_message = validate_filters(data)
+
+if valid:
+    results = search(data)
+else:
+    print(error_message)
+
+# @app.route('/search', methods=['POST'])
+# def search_endpoint():
+#     data = request.json
+
+#     # Validate filters
+#     is_valid, error_message = validate_filters(data)
+#     if not is_valid:
+#         return jsonify({"error": error_message}), 400
+
+#     # Proceed with search operation
+#     results, status_code = search(model_name, data)
+#     return jsonify(results), status_code
+
+
+# TODO: Uncomment below
+# if __name__ == '__main__':
+#     app.run(host='0.0.0.0', port=9090)
 
