@@ -156,8 +156,8 @@ validators==0.34.0
 wasabi==1.1.3
 wcwidth==0.2.13
 weasel==0.4.1
-weaviate==0.1.0
-weaviate-client==4.8.1
+weaviate==0.1.2
+weaviate-client==4.9.2
 Werkzeug==3.0.4
 Whoosh==2.7.4
 wrapt==1.16.0

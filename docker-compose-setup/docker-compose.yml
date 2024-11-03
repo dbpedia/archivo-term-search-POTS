@@ -1,0 +1,85 @@
+version: '2.4'
+
+services:
+  
+  indexer:
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
+    depends_on:
+      - weaviate
+    network_mode: "service:weaviate"
+    environment:
+      # SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:-http://store:8890/sparql}
+      SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options fo fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
+      WEAVIATE_PORT: ${WEAVIATE_PORT}
+      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+      DELETE_OLD_INDEX: ${DELETE_OLD_INDEX}
+    command: >
+      /bin/bash -c "source activate onto_search_env && sleep 20 && python VectorDB_creation.py"
+    # networks:
+    #   - app_network
+
+  api:
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
+    network_mode: "service:weaviate"
+    depends_on:
+      # - indexer
+      - weaviate
+    # ports:
+    #   - "9091:9090"
+    environment:
+      WEAVIATE_PORT: ${WEAVIATE_PORT}
+      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+    command: >
+      /bin/bash -c "source activate onto_search_env && sleep 2000 && env && python API_main.py"
+    # networks:
+    #   - app_network
+  
+  # using text2vec TRANSFORMERS_INFERENCE_API base on docker container running hugingface transformers api endpoint
+  weaviate:
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --scheme
+      - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
+    ports:
+    - 8012:8080
+    - 50053:50051
+    volumes:
+    - ./weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_MODULES: 'text2vec-transformers'
+      CLUSTER_HOSTNAME: 'node1'
+
+  t2v-transformers:
+    # image: cr.weaviate.io/semitechnologies/transformers-inference:baai-bge-m3-onnx-1.9.6
+    image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
+    environment:
+      ENABLE_CUDA: '0'
+      # OPENBLAS_NUM_THREADS: 8
+    security_opt: # todo this needs to be refined
+      - seccomp:unconfined 
+
+
+# networks:
+#   app_network:
+#     driver: bridge
+
+
+
