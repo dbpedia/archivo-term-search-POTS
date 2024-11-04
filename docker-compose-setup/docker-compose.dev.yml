@@ -2,17 +2,37 @@ version: '2.4'
 
 services:
 
-#overwrite local copy of image live with state of the code without need to rebuild image (setup the environment)
+# mount/overwrite local copy of code/repo baked into image with live state of the code without need to rebuild image
   indexer:
     build:
       args:
         CODE_ORIGIN: copy_local
     volumes:
-      - ./onto-search:/onto-search
-
+      - ../:/onto-search
   api:
     build:
       args:
         CODE_ORIGIN: copy_local
     volumes:
-      - ./onto-search:/onto-search
+      - ../:/onto-search
+  
+
+  manual-checks-dummy:
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: copy_local
+    network_mode: "service:weaviate"
+    # depends_on:
+      # - indexer
+      # - weaviate
+    # ports:
+    #   - "9091:9090"
+    environment:
+      WEAVIATE_PORT: ${WEAVIATE_PORT}
+      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+    command: >
+      /bin/bash -c "source activate onto_search_env && env && sleep infinity"
+    # networks:
+    #   - app_network

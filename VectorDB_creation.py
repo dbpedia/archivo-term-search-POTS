@@ -1430,5 +1430,5 @@ if __name__ == "__main__":
     except Exception as e:
         print("Error", e, traceback.format_exc())
         
-    finally;
+    finally:
         client.close()
