@@ -13,7 +13,6 @@ def perform_search_case(case_data, case_name):
         "Content-Type": "application/json"
     }
     # Include the model_name in the case data
-    print("Querying", case_data)
     response = requests.post(api_endpoint, headers=headers, data=json.dumps(case_data))
     if response.status_code == 200:
         print(f"{case_name}:")
@@ -22,32 +21,36 @@ def perform_search_case(case_data, case_name):
         print(f"{case_name} failed with status code {response.status_code}:")
         print(response.text)
 
-case_4 = {
-    "model_name": "LaBSE",
-    "term": "Date",
-    "context": {
-        "domain": "person",
-    },
-    "filters": {
-        "datatype":  "something"
-    }
-}
-perform_search_case(case_4, "CASE 4")
 
-case_5 = {
-    "model_name": "LaBSE",
-    "term": "Date",
-    "context": {
-        "domain": "creative work",
-    },
-    "filters": {
-        "datatype": "object_property"
-    }
-}
-perform_search_case(case_5, "CASE 5")
+case_name = "Simple fuzzy filtering"
 
-case_6 = {
-    "model_name": "LaBSE",
-    "term": "Date",
+data = {
+    "fuzzy_filters": {"label": "date"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},
 }
-perform_search_case(case_6, "CASE 6")
+perform_search_case(data, case_name)
+
+case_name = "Simple exact filtering"
+data = {
+
+    "exact_filters": {"termtype": "ObjectProperty"}
+}
+perform_search_case(data, case_name)
+
+case_name = "Complex exact filtering"
+data = {
+    "exact_filters": {"termtype": "ObjectProperty", "domain": 'http://www.demcare.eu/ontologies/demlab.owl#Protocol'}
+}
+perform_search_case(data, case_name)
+
+
+case_name = "Complex fuzzy filtering"
+
+data = {
+    "fuzzy_filters": {"label": "date", "domain": "creative work"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},
+    "exact_filters": {"termtype": "ObjectProperty"}
+}
+perform_search_case(data, case_name)
+
+

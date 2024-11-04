@@ -127,11 +127,11 @@ def build_filters(filtersDict):
 
 def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, desired_language, limit):
     
-    for x in signature_properties_to_consider:
-        print("Embedding", signature_properties_to_consider[x], "to originals")
+    # for x in signature_properties_to_consider:
+    #     print("Embedding", signature_properties_to_consider[x], "to originals")
         
-    for x in reference_properties_to_consider:
-        print("Embedding", reference_properties_to_consider[x], "to copies")
+    # for x in reference_properties_to_consider:
+    #     print("Embedding", reference_properties_to_consider[x], "to copies")
     
     signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
     reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
@@ -180,7 +180,7 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
     if signature_properties_to_consider and reference_properties_to_consider:
         target_vectors = TargetVectors.relative_score({x: (0.5 if "___CP_SEPARATOR___" not in x else 0.33 ) for x in target_vectors})
         
-    print("Target vectors:", target_vectors)
+    #print("Target vectors:", target_vectors)
     #print(named_vectors_to_search)
     #print("Near vector input:", named_vectors_to_search)
     #print("Target vectors:", target_vectors)
@@ -193,7 +193,7 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
         ).objects
         
     
-    return [(x.properties["label"], x.properties["termIRI"], x.properties["domain"], x.properties["range"], x.metadata.distance) for x in results]
+    return [(x.properties, x.metadata.distance) for x in results]
         
     # except Exception as e:
     #     print(e)
@@ -211,7 +211,7 @@ def pure_exact_search(exact_filters):
     for collection_name in target_collections:
         collection_name = collections_translation[collection_name]
 
-        results[collection_name] = [x.properties for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters).objects]
+        results[collection_name] = [(x.properties, "None") for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters, limit=DEFAULT_LIMIT).objects]
         
     return results
         
@@ -239,7 +239,7 @@ def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_prop
     
     results = {}
     if target_collection:
-        print("Getting", signature_properties_to_consider, reference_properties_to_consider, "from", target_collection)
+        #print("Getting", signature_properties_to_consider, reference_properties_to_consider, "from", target_collection)
         results[target_collection] = query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
     
     else:
@@ -270,74 +270,21 @@ def search(data):
         # PURE EXACT SEARCH
         results = pure_exact_search(exact_filters)
         
-        
-    for x in results:
-        print(x, "---------------------")
-        if results[x]:
-            for y in results[x]:
-                print(y)
+    return results, 200
+@app.route('/search', methods=['POST'])
+def search_endpoint():
+    data = request.json
+
+    # Validate filters
+    is_valid, error_message = validate_filters(data)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+
+    # Proceed with search operation
+    results, status_code = search(data)
+    return jsonify(results), status_code
 
 
-print("FIRST")
-
-data = {
-
-    "fuzzy_filters": {"label": "date"},#,, "domain": "artist", "range": "Date"},
-    "fuzzy_filters_config": {"model_name": "LaBSE"},
-    "exact_filters": {"termtype": "ObjectProperty"}
-}
-valid, error_message = validate_filters(data)
-
-if valid:
-    results = search(data)
-else:
-    print(error_message)
-    
-print()
-print("SECOND")
-data = {
-
-    "fuzzy_filters": {"label": "date", "domain": "person"},
-    "fuzzy_filters_config": {"model_name": "LaBSE"},
-    "exact_filters": {"termtype": "ObjectProperty"}
-}
-valid, error_message = validate_filters(data)
-
-if valid:
-    results = search(data)
-else:
-    print(error_message)
-    
-print()
-print("THIRD")
-data = {
-
-    "fuzzy_filters": {"label": "date", "domain": "musical work"},
-    "fuzzy_filters_config": {"model_name": "LaBSE"},
-    "exact_filters": {"termtype": "ObjectProperty"}
-}
-valid, error_message = validate_filters(data)
-
-if valid:
-    results = search(data)
-else:
-    print(error_message)
-
-# @app.route('/search', methods=['POST'])
-# def search_endpoint():
-#     data = request.json
-
-#     # Validate filters
-#     is_valid, error_message = validate_filters(data)
-#     if not is_valid:
-#         return jsonify({"error": error_message}), 400
-
-#     # Proceed with search operation
-#     results, status_code = search(model_name, data)
-#     return jsonify(results), status_code
-
-
-# TODO: Uncomment below
-# if __name__ == '__main__':
-#     app.run(host='0.0.0.0', port=9090)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=9090)
 
