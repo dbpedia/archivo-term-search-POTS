@@ -1,0 +1,28 @@
+# this compose drop-in has the purpose to enable the usage of multiple models hosted via commercial APIs in Weaviate 
+# also it is needed to pass through the API keys when they are only provided as environment var to the docker-compose command
+
+version: '2.4'
+services:
+  weaviate:
+    # env_file: ## pass through the api keys from the api-keys.env file that can be temporarily created by the user
+    #   - api-keys.env
+    environment: 
+      #pass through api keys to weaviate container that are defined as environment variables to docker-compose command
+      OPENAI_APIKEY: $OPENAI_APIKEY
+      HUGGINGFACE_APIKEY: $HUGGINGFACE_APIKEY
+      COHERE_APIKEY: $COHERE_APIKEY
+      # PALM_APIKEY: $PALM_APIKEY #deprecated by STUDIO_APIKEY key?
+      STUDIO_APIKEY: $STUDIO_APIKEY
+      AWS_ACCESS_KEY: $AWS_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_SECRET_KEY
+      ANYSCALE_APIKEY: $ANYSCALE_APIKEY
+      MISTRAL_APIKEY: $MISTRAL_APIKEY
+      ANTHROPIC_APIKEY: $ANTHROPIC_APIKEY
+      DATABRICKS_TOKEN: $DATABRICKS_TOKEN
+      FRIENDLI_TOKEN: $FRIENDLI_TOKEN
+
+      # enable API based modules like text2vec-huggingface text2vec-openai etc.
+      ENABLE_API_BASED_MODULES: 'true' 
+
+      # optionally define one of the API-based text2vec-xyz models as default vectorizer module
+      # DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'

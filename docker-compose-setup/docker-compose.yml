@@ -62,14 +62,14 @@ services:
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
+      TRANSFORMERS_INFERENCE_API: 'http://prebuilt-t2v-transformers-model:8080'
       DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
       ENABLE_API_BASED_MODULES: 'true'
       ENABLE_MODULES: 'text2vec-transformers'
       CLUSTER_HOSTNAME: 'node1'
 
-  t2v-transformers:
-    # for pre-built images see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
+  prebuilt-t2v-transformers-model:
+    # for pre-built images from weaviate see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
     image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
     environment:
       ENABLE_CUDA: '0'
