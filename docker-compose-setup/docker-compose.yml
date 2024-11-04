@@ -12,7 +12,6 @@ services:
       - weaviate
     network_mode: "service:weaviate"
     environment:
-      # SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:-http://store:8890/sparql}
       SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options fo fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
       WEAVIATE_PORT: ${WEAVIATE_PORT}
       WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}

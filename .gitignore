@@ -1,2 +1,4 @@
 weaviate_data/
 __pycache__/
+virtuoso/
+ontology-data/
