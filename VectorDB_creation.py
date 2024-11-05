@@ -17,9 +17,11 @@ wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 url_endpoint =  os.getenv("SPARQL_ENDPOINT")
-local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
+
 
 # Available models
 model_names = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
@@ -92,18 +94,18 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
     empty_embeddings = {}
     
     for formatted_object in all_objects:
-        print("\n---------------------------------------------------")
-        print("New Object")
-        print("Object IRI:", formatted_object.properties["termIRI"])
-        print("Object label:", formatted_object.properties["label"])
+    #     print("\n---------------------------------------------------")
+    #     print("New Object")
+    #     print("Object IRI:", formatted_object.properties["termIRI"])
+    #     print("Object label:", formatted_object.properties["label"])
 
         # Ensure a dictionary exists for each object's UUID
         if not formatted_object.uuid in embeddings:
             embeddings[formatted_object.uuid] = {}
             
         for vector in all_named_vectors:
-            print("")
-            print("Search in vector", vector)
+            # print("")
+            # print("Search in vector", vector)
             if "___CP_SEPARATOR___" in vector:
                 # Split the vector name to extract original and copy info
                 original_vector_info, copy_vector_info = vector.split("___CP_SEPARATOR___")
@@ -119,7 +121,7 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
                 
                 # Check if the property exists in the object's properties
                 if len(formatted_object.properties[property_to_find]) >= int(index):
-                    print("Looking to find", property_to_find)
+                    #print("Looking to find", property_to_find)
                     target_uri = formatted_object.properties[property_to_find][int(index)-1]
 
                     # Query the collection for the named vector embedding
@@ -128,7 +130,7 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
                     if result:
                         # Store the result in the embeddings dictionary
                         embeddings[formatted_object.uuid][vector] = result
-                        print("Set", formatted_object.properties["termIRI"], "to", target_uri,"'s", prop) 
+                        #print("Set", formatted_object.properties["termIRI"], "to", target_uri,"'s", prop) 
                     else:
                         # If no result found, use an empty embedding
                         embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
@@ -154,7 +156,7 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
 def query_collection_for_NV_embedding(target_collection, target_uri, target_named_vector):
     # Fetch the specified collection
     collection = client.collections.get(name=target_collection)
-    print("Looking for", target_uri)
+    #print("Looking for", target_uri)
 
     # Attempt to fetch the object by its UUID
     data_object = collection.query.fetch_object_by_id(
@@ -250,7 +252,7 @@ def create_object_property_collection():
 
     # Remove duplicates by converting the list to a set
     all_named_vectors = set(all_named_vectors)  
-    print([x.name for x in all_named_vectors])
+    #print([x.name for x in all_named_vectors])
     
     # Format objects for upload
     formatted_objects_for_upload = format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
@@ -1398,10 +1400,10 @@ headers = {
 
 if __name__ == "__main__":
 
-    client = weaviate.connect_to_local(
-
-        port=8080,
-        grpc_port=50051,
+    client = weaviate.connect_to_embedded(
+        hostname="localhost",
+        port=weaviate_port,
+        grpc_port=weaviate_port_grpc,
         headers=headers
         
     )

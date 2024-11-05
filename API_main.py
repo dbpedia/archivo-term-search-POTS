@@ -22,8 +22,9 @@ wcd_url = os.getenv("WCD_URL")
 wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
-local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE")
 DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT"))
 
@@ -31,10 +32,10 @@ DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT"))
 headers = {
     "X-HuggingFace-Api-Key": hf_key,
 }
-client = weaviate.connect_to_local(
-    
-    port=local_weaviate_port,
-    grpc_port=local_weaviate_port_grpc,
+client = weaviate.connect_to_embedded(
+    hostname=weaviate_address,
+    port=weaviate_port,
+    grpc_port=weaviate_port_grpc,
     headers=headers
 
 )
@@ -49,6 +50,7 @@ models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x
 
 
 collections = ['DataProperties', 'ObjectProperties', 'Classes', 'Individuals', 'RDFtypes'] # TODO: Add "Ontologies"
+
 collections_translation = {
     'DataProperty': 'DataProperties',
     'ObjectProperty': 'ObjectProperties',
@@ -198,7 +200,6 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
     # except Exception as e:
     #     print(e)
     
-
 def pure_exact_search(exact_filters):
     filters = build_filters(exact_filters)
     
@@ -215,7 +216,6 @@ def pure_exact_search(exact_filters):
         
     return results
         
-
 def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_property, language, limit):
     
     target_collection = None
@@ -239,7 +239,6 @@ def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_prop
     
     results = {}
     if target_collection:
-        #print("Getting", signature_properties_to_consider, reference_properties_to_consider, "from", target_collection)
         results[target_collection] = query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
     
     else:

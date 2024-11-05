@@ -17,8 +17,9 @@ wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 url_endpoint =  os.getenv("SPARQL_ENDPOINT")
-local_weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-local_weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
 
 # Available models
@@ -28,13 +29,14 @@ headers = {
 }
  
         
-client = weaviate.connect_to_local(
-
-    port=8080,
-    grpc_port=50051,
+client = weaviate.connect_to_embedded(
+    hostname=weaviate_address,
+    port=weaviate_port,
+    grpc_port=weaviate_port_grpc,
     headers=headers
 
 )
+
 for x in client.collections.list_all(simple=True):
     print(client.collections.get(name=x).name, "exists")
     
