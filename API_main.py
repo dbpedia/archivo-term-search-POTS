@@ -271,6 +271,7 @@ def search(data):
         results = pure_exact_search(exact_filters)
         
     return results, 200
+
 @app.route('/search', methods=['POST'])
 def search_endpoint():
     data = request.json

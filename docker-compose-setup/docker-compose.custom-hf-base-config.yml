@@ -1,0 +1,22 @@
+# template/example drop-in file for onto-search setup with self-deployable text2vec-transformers using huggingface models that are compatible with any model that is compatible with the Transformer library's AutoModel and AutoTokenizer classes.
+# you can use on of the examples service as template; change the service-name and adjust MODEL_NAME, exposed ports (if needed) and optionally environment var for startup of the model
+# showcased here are 2 transformers models, one of them is a sentence-transformers model, the other one is a regular on
+
+version: '2.4'
+
+services:
+
+  custom-t2v-hf-transformer-base-config:
+    image: semitechnologies/transformers-inference:custom-1.9.6 # see https://github.com/weaviate/t2v-transformers-models/tree/d7d8312d5b58d3f7fd5220485961d8ca746c2d57 for download.py and Dockerfile
+    environment:
+      MODEL_NAME: 'distilbert/distilroberta-base'  # hugginface transformers model name
+      ENABLE_CUDA: '0'
+    entrypoint: ["/bin/sh", "-c", "/app/load-and-start-transformer.sh"] # overwrite the default entrypoint to download the model intially from web
+                                                                        # but for subsequent runs from volume and start the transformers-inference api server
+    volumes:
+      - /app/models # persist the downloaded model in an anonymous volume per container/service
+      - ./cached-downloader-transformers-entrypoint.sh:/app/load-and-start-transformer.sh:ro # mount our custom entrypoint script
+    security_opt: # todo this needs to be refined is needed for letting the transformes-inference container start threads
+      - seccomp:unconfined 
+
+
