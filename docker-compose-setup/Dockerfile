@@ -45,7 +45,7 @@ RUN if [ "$CODE_ORIGIN" = "clone_github" ]; then \
         git checkout deployment_test; \
     elif [ "$CODE_ORIGIN" = "copy_local" ]; then \
         if [ ! -f /tmp/onto-search/requirements.txt ]; then \
-            echo "Error: /tmp/onto-search/requirements.txt does not exist. This mode assumes the project in the context to build the image." && exit 1; \
+            echo "Error: requirements.txt does not exist - 'copy_local' mode assumes the onto-search GitHub project in the context to build a functioning image." && exit 1; \
         fi; \
         mkdir -p /onto-search && mv /tmp/onto-search/* /onto-search/; \
     else \

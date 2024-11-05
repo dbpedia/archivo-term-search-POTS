@@ -3,6 +3,7 @@ import json
 
 # Define the API endpoint
 api_endpoint = "http://127.0.0.1:9090/search"
+#"http://127.0.0.1:9090/search"
 
 # Define the model name
 model_name = "LaBSE"

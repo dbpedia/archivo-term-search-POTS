@@ -38,7 +38,7 @@ services:
       WEAVIATE_PORT: ${WEAVIATE_PORT}
       WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
-      /bin/bash -c "source activate onto_search_env && sleep 2000 && env && python API_main.py"
+      /bin/bash -c "source activate onto_search_env && sleep 20 && python API_main.py"
     # networks:
     #   - app_network
   
@@ -59,16 +59,17 @@ services:
     - ./weaviate_data:/var/lib/weaviate
     restart: on-failure:0
     environment:
-      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      TRANSFORMERS_INFERENCE_API: 'http://prebuilt-t2v-transformers-model:8080'
       DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_API_BASED_MODULES: 'true'
       ENABLE_MODULES: 'text2vec-transformers'
       CLUSTER_HOSTNAME: 'node1'
 
-  t2v-transformers:
-    # image: cr.weaviate.io/semitechnologies/transformers-inference:baai-bge-m3-onnx-1.9.6
+  prebuilt-t2v-transformers-model:
+    # for pre-built images from weaviate see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
     image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
     environment:
       ENABLE_CUDA: '0'

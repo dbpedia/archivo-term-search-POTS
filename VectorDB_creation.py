@@ -1396,12 +1396,11 @@ headers = {
 }
 
 
-
 if __name__ == "__main__":
-    
+
     client = weaviate.connect_to_local(
-        
-        port=8011,
+
+        port=8080,
         grpc_port=50051,
         headers=headers
         

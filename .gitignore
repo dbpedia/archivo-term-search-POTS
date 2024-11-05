@@ -1,4 +1,4 @@
-
-
+weaviate_data/
+__pycache__/
 .env
 .real_env
