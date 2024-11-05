@@ -12,34 +12,21 @@ services:
       DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
       
   custom-t2v-hf-transformer:
-    image: semitechnologies/transformers-inference:custom-1.9.6 # see https://github.com/weaviate/t2v-transformers-models/tree/d7d8312d5b58d3f7fd5220485961d8ca746c2d57 for download.py and Dockerfile
-    environment:
+    environment: # see https://github.com/weaviate/t2v-transformers-models/tree/d7d8312d5b58d3f7fd5220485961d8ca746c2d57 for environment vars in download.py and Dockerfile
       MODEL_NAME: 'distilbert/distilroberta-base'  # hugginface transformers model name
       ENABLE_CUDA: '0'
-    entrypoint: ["/bin/sh", "-c", "/app/load-and-start-transformer.sh"] # overwrite the default entrypoint to download the model intially from web
-                                                                        # but for subsequent runs from volume and start the transformers-inference api server
-    volumes:
-      - /app/models # persist the downloaded model in an anonymous volume per container/service
-      - ./cached-downloader-transformers-entrypoint.sh:/app/load-and-start-transformer.sh:ro # mount our custom entrypoint script
-    security_opt: # todo this needs to be refined is needed for letting the transformes-inference container start threads
-      - seccomp:unconfined 
-    # ports:
-    #   - "8087:8080"
+    extends: # use "template" service that only loads the model on first run and then uses the cached model 
+      file: docker-compose.custom-hf-base-config.yml
+      service: custom-t2v-hf-transformer-base-config
 
   custom-t2v-hf-sentence-transformer:
-    image: semitechnologies/transformers-inference:custom-1.9.6
     environment:
       MODEL_NAME: 'sentence-transformers/all-MiniLM-L6-v2'
       USE_SENTENCE_TRANSFORMERS_VECTORIZER: '1' # use sentence-transformers vectorizer for native sentence-transformers models
       ENABLE_CUDA: '0'
-    entrypoint: ["/bin/sh", "-c", "/app/load-and-start-transformer.sh"] # overwrite the default entrypoint to download the model intially from web
-                                                                        # but for subsequent runs from volume and start the transformers-inference api server
-    volumes:
-      - /app/models # persist the downloaded model in an anonymous volume per container/service
-      - ./cached-downloader-transformers-entrypoint.sh:/app/load-and-start-transformer.sh:ro # mount our custom entrypoint script
-    security_opt: # todo this needs to be refined is needed for letting the transformes-inference container start threads
-      - seccomp:unconfined 
-    # ports:
-    #   - "8089:8080"
-
+    extends: # use "template" service that only loads the model on first run and then uses the cached model 
+      file: docker-compose.custom-hf-base-config.yml
+      service: custom-t2v-hf-transformer-base-config
+     # ports:
+     #   - "8089:8080"
 
