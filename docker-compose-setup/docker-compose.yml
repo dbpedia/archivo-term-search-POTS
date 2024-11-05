@@ -1,8 +1,9 @@
-version: '2.4'
+version: '3.8'
 
 services:
   
   indexer:
+    profiles: [indexing]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
@@ -12,16 +13,15 @@ services:
       - weaviate
     network_mode: "service:weaviate"
     environment:
-      SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options fo fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
+      SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options to fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
       WEAVIATE_PORT: ${WEAVIATE_PORT}
       WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
       DELETE_OLD_INDEX: ${DELETE_OLD_INDEX}
     command: >
       /bin/bash -c "source activate onto_search_env && sleep 20 && python VectorDB_creation.py"
-    # networks:
-    #   - app_network
 
   api:
+    profiles: [serve-api]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
@@ -29,7 +29,6 @@ services:
         CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
     network_mode: "service:weaviate"
     depends_on:
-      # - indexer
       - weaviate
     # ports:
     #   - "9091:9090"
@@ -38,11 +37,10 @@ services:
       WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
       /bin/bash -c "source activate onto_search_env && sleep 20 && python API_main.py"
-    # networks:
-    #   - app_network
   
   # using text2vec TRANSFORMERS_INFERENCE_API base on docker container running hugingface transformers api endpoint
   weaviate:
+    profiles: [indexing, serve-api]
     command:
       - --host
       - 0.0.0.0
@@ -68,18 +66,11 @@ services:
       CLUSTER_HOSTNAME: 'node1'
 
   prebuilt-t2v-transformers-model:
+    profiles: [indexing, serve-api]
     # for pre-built images from weaviate see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
     image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
     environment:
       ENABLE_CUDA: '0'
       # OPENBLAS_NUM_THREADS: 8
     security_opt: # todo this needs to be refined
-      - seccomp:unconfined 
-
-
-# networks:
-#   app_network:
-#     driver: bridge
-
-
-
+      - seccomp:unconfined

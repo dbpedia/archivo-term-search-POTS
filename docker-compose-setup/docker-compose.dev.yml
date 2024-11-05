@@ -15,8 +15,7 @@ services:
         CODE_ORIGIN: copy_local
     volumes:
       - ../:/onto-search
-  
-
+    
   manual-checks-dummy:
     build:
       context: ../
@@ -24,15 +23,8 @@ services:
       args:
         CODE_ORIGIN: copy_local
     network_mode: "service:weaviate"
-    # depends_on:
-      # - indexer
-      # - weaviate
-    # ports:
-    #   - "9091:9090"
     environment:
       WEAVIATE_PORT: ${WEAVIATE_PORT}
       WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
       /bin/bash -c "source activate onto_search_env && env && sleep infinity"
-    # networks:
-    #   - app_network
