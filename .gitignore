@@ -1,4 +1,6 @@
 weaviate_data/
 __pycache__/
+virtuoso/
+ontology-data/
 .env
 .real_env
