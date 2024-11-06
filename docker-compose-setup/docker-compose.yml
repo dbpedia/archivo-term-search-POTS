@@ -30,7 +30,7 @@ services:
     depends_on:
       - weaviate
     # ports:
-    #   - "9091:9090"
+    #   - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:9090"
     env_file: compose-config.env
     environment:
       WEAVIATE_PORT: ${WEAVIATE_PORT}
@@ -48,9 +48,9 @@ services:
       - --scheme
       - http
     image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
-    ports:
-    - 8012:8080
-    - 50053:50051
+    # ports:
+    # - 8012:8080
+    # - 50053:50051
     volumes:
     - ./weaviate_data:/var/lib/weaviate
     restart: on-failure:0
