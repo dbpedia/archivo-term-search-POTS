@@ -51,7 +51,6 @@ collections_translation = {
     'RDFtype': 'RDFtypes'
 }
 
-
 def validate_filters(data):
     # Check for fuzzy filters
     fuzzy_filters = data.get("fuzzy_filters")
@@ -119,23 +118,16 @@ def build_filters(filtersDict):
                 combined_filter = combined_filter & current_filter
     return combined_filter
 
-def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, desired_language, limit):
-    
-    # for x in signature_properties_to_consider:
-    #     print("Embedding", signature_properties_to_consider[x], "to originals")
-        
-    # for x in reference_properties_to_consider:
-    #     print("Embedding", reference_properties_to_consider[x], "to copies")
+def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, desired_language, limit):
     
     signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
     reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
     
-    # print(signature_property_embeddings)
-    # print(reference_property_embeddings)
+    hybrid_property_str = hybrid_property.get("query", None)
+    
     # Get the collection object from the client (Assuming `client` is properly initialized)
     collection = client.collections.get(name=collections_translation[target_collection])
     named_vectors = collection.config.get().vector_config.keys()
-    #print("All possible named vectors:", named_vectors)
 
     #print(named_vectors)
     named_vectors_to_search = {}
@@ -178,13 +170,25 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
     #print(named_vectors_to_search)
     #print("Near vector input:", named_vectors_to_search)
     #print("Target vectors:", target_vectors)
-    results = collection.query.near_vector(
-            near_vector=named_vectors_to_search,
-            target_vector=target_vectors,
-            filters=built_filters,
-            limit=limit, #TODO: PASS LIMIT
-            return_metadata=MetadataQuery(distance=True)
-        ).objects
+    
+    if not hybrid_property:
+        results = collection.query.near_vector(
+                near_vector=named_vectors_to_search,
+                target_vector=target_vectors,
+                filters=built_filters,
+                limit=limit,
+                return_metadata=MetadataQuery(distance=True)
+            ).objects
+    else:
+        
+        results = collection.query.hybrid(
+                query=hybrid_property_str,
+                vector=named_vectors_to_search,
+                target_vector=target_vectors,
+                filters=built_filters,
+                limit=limit, 
+                return_metadata=MetadataQuery(distance=True)
+            ).objects
         
     
     return [(x.properties, x.metadata.distance) for x in results]
@@ -231,15 +235,14 @@ def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_prop
     
     results = {}
     if target_collection:
-        results[target_collection] = query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
+        results[target_collection] = query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
     
     else:
         for collection_name in collections_translation:
-            results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, built_filters, language, limit)
+            results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
     
     return results
     
-
 def search(data):
     fuzzy_filters = data.get("fuzzy_filters")
     fuzzy_filters_config = data.get("fuzzy_filters_config")
@@ -276,7 +279,5 @@ def search_endpoint():
     results, status_code = search(data)
     return jsonify(results), status_code
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=9090)
-

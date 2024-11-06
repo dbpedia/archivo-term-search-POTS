@@ -10,7 +10,12 @@ import traceback
 from dataclasses import dataclass, field
 from typing import List
 from weaviate_client import get_weaviate_client
+import logging
+
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename=f'{__name__}_ERRORS.log', encoding='utf-8', level=logging.error)
 
 # Global variables
 wcd_url = os.getenv("WCD_URL")
@@ -142,14 +147,14 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
     return embeddings  # Return the mappings of UUIDs to named vector embeddings
 
 def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
-    print("Filling copied named vectors")
+    logger.info("Filling copied named vectors")
     collection = client.collections.get(name=target_collection)
 
     # Calculate the progress interval for logging
     tp = len(uuid_to_nv_mappings) / 10
     for i, uuid in enumerate(uuid_to_nv_mappings):
         if i % int(tp) == 0:
-            print(i, "/", len(uuid_to_nv_mappings))
+            logger.info(i, "/", len(uuid_to_nv_mappings))
         if uuid_to_nv_mappings[uuid]:
             # Update the collection with the vector mappings
             collection.data.update(uuid, vector=uuid_to_nv_mappings[uuid])
@@ -168,6 +173,7 @@ def query_collection_for_NV_embedding(target_collection, target_uri, target_name
     if data_object:
         # Return the specific named vector if it exists
         return data_object.vector[target_named_vector]
+    
     return None  # Return None if the object is not found
 
 def fetch_all_objects(collection):
@@ -231,7 +237,7 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
     return formatted_objects  # Return the list of formatted objects
 
 def create_object_property_collection():
-    print("Creating ObjectProperties collection")
+    logger.info("Creating ObjectProperties collection")
     # Fetch data from the endpoint for ObjectProperties
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="ObjectProperties")
 
@@ -264,7 +270,7 @@ def create_object_property_collection():
     # Delete the existing collection if it exists
     client.collections.delete("ObjectProperties")
 
-    print("Creating collection")
+    logger.info("Creating collection")
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="ObjectProperties",
@@ -283,17 +289,17 @@ def create_object_property_collection():
     )
 
     # Upload the formatted object data
-    print("Uploading data")
+    logger.info("Uploading data")
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")
+            logger.info(f"Uploading batch {i + 1}")
             collection.data.insert_many(batch)
     except Exception as e:
-        print(f"Error during insert_many: {e}")
+        logging.error("Error during insert_many: %s", exc_info=e)
 
 def fill_object_property_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -323,7 +329,7 @@ def get_class_collection_mappings():
     return models, methodologies  # Return both models and methodologies
 
 def format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
-    print("Formatting objects")  # Indicate the start of formatting objects
+    logger.info("Formatting objects")  # Indicate the start of formatting objects
     formatted_objects = []  # List to hold the formatted objects
     for i, result_doc in enumerate(endpoint_query_results):
         # Create a dictionary to store properties of the class
@@ -364,7 +370,7 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
     return formatted_objects  # Return the list of formatted objects
 
 def create_class_collection():
-    print("Creating class collection")  # Indicate the start of collection creation
+    logger.info("Creating class collection")  # Indicate the start of collection creation
     # Fetch data from the endpoint for Classes
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Classes")
 
@@ -395,7 +401,7 @@ def create_class_collection():
     # Delete the existing collection if it exists
     client.collections.delete("Classes")
 
-    print("Creating collection")  # Indicate that the collection is being created
+    logger.info("Creating collection")  # Indicate that the collection is being created
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="Classes",
@@ -414,17 +420,17 @@ def create_class_collection():
     )
 
     # Upload the formatted object data
-    print("Uploading data")  # Indicate the start of data upload
+    logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors that occur during upload
+        logging.error(e)  # Catch and print any errors that occur during upload
 
 def fill_class_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -440,7 +446,7 @@ def fill_class_copied_named_vectors():
 # OLD (TODO: rewrite soon)
 def class_collection_creation_hf_integration():
     # Get ontology class data from endpoint
-    print("Loading data")  # Indicate the start of data loading
+    logger.info("Loading data")  # Indicate the start of data loading
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="classes")
 
     # Create mappings for model names to their corresponding SentenceTransformerEmbeddings instances
@@ -481,13 +487,13 @@ def class_collection_creation_hf_integration():
     formatted_objects_for_upload = []  # List to hold objects formatted for upload
 
     # Formatting of the ontology data to upload to the collection
-    print("Generating embeddings and formatting data")
+    logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
         tp = len(endpoint_query_results) / 10  # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            print(i, "/", len(endpoint_query_results))
+            logger.info(i, "/", len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
 
@@ -518,7 +524,7 @@ def class_collection_creation_hf_integration():
     client.collections.delete("Classes_hf")
 
     # Create a new collection with the vectorizer configs
-    print("Creating collection")
+    logger.info("Creating collection")
     collection = client.collections.create(
         name="Classes_hf",
         description="Text2kg benchmark classes",
@@ -536,7 +542,7 @@ def class_collection_creation_hf_integration():
     )
     
     # Upload the formatted object data
-    print("Uploading data")
+    logger.info("Uploading data")
     objects_to_upload = []
     for d in formatted_objects_for_upload:
         objects_to_upload.append(wvc.data.DataObject(
@@ -549,11 +555,11 @@ def class_collection_creation_hf_integration():
 
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
 
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors during upload
+        logging.exception(e)  # Catch and print any errors during upload
 
 # Individual Collection Functions
 
@@ -611,7 +617,7 @@ def format_individuals_query_results(endpoint_query_results, methodologies, mode
     return formatted_objects  # Return the list of formatted objects
 
 def create_individuals_collection():
-    print("Creating Individuals collection")  # Indicate the start of collection creation
+    logger.info("Creating Individuals collection")  # Indicate the start of collection creation
     # Fetch data from the endpoint for Individuals
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Individuals")
 
@@ -642,7 +648,7 @@ def create_individuals_collection():
     # Delete the existing collection if it exists
     client.collections.delete("Individuals")
 
-    print("Creating collection")  # Indicate that the collection is being created
+    logger.info("Creating collection")  # Indicate that the collection is being created
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="Individuals",
@@ -661,17 +667,17 @@ def create_individuals_collection():
     )
 
     # Upload the formatted object data
-    print("Uploading data")  # Indicate the start of data upload
+    logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors that occur during upload
+        logging.error(e)  # Catch and print any errors that occur during upload
 
 def fill_individuals_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -686,7 +692,7 @@ def fill_individuals_copied_named_vectors():
 
 def individual_collection_creation():
     # Get ontology property data from endpoint
-    print("Loading data")  # Indicate the start of data loading
+    logger.info("Loading data")  # Indicate the start of data loading
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="individuals")
 
     # Mappings between mapping methodology names and functions
@@ -712,13 +718,13 @@ def individual_collection_creation():
     formatted_objects_for_upload = []  # List to hold formatted objects for upload
 
     # Formatting of the ontology data to upload to the collection
-    print("Generating embeddings and formatting data")  # Indicate the start of data formatting
+    logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
     for i, result_doc in enumerate(endpoint_query_results):
         tp = len(endpoint_query_results) / 10  # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            print(i, "/", len(endpoint_query_results))
+            logger.info(i, "/", len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
         
@@ -762,7 +768,7 @@ def individual_collection_creation():
     client.collections.delete("Individuals")
 
     # Create a new collection with the vectorizer configs
-    print("Creating collection")  # Indicate that the collection is being created
+    logger.info("Creating collection")  # Indicate that the collection is being created
     collection = client.collections.create(
         name="Individuals",
         description="Text2kg benchmark individuals",
@@ -780,7 +786,7 @@ def individual_collection_creation():
     )
 
     # Upload the formatted object data
-    print("Uploading data")  # Indicate the start of data upload
+    logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = []
     for d in formatted_objects_for_upload:
         objects_to_upload.append(wvc.data.DataObject(
@@ -794,10 +800,10 @@ def individual_collection_creation():
 
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors that occur during upload
+        logging.error(e)  # Catch and print any errors that occur during upload
 
 
 # Data Property Collection Functions
@@ -855,7 +861,7 @@ def format_data_property_query_results(endpoint_query_results, methodologies, mo
     return formatted_objects  # Return the list of formatted objects
 
 def create_data_property_collection():
-    print("Creating DataProperties collection")  # Indicate the start of collection creation
+    logger.info("Creating DataProperties collection")  # Indicate the start of collection creation
     # Fetch data from the endpoint for DataProperties
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="DataProperties")
 
@@ -886,7 +892,7 @@ def create_data_property_collection():
     # Delete the existing collection if it exists
     client.collections.delete("DataProperties")
 
-    print("Creating collection")  # Indicate that the collection is being created
+    logger.info("Creating collection")  # Indicate that the collection is being created
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="DataProperties",
@@ -905,17 +911,17 @@ def create_data_property_collection():
     )
 
     # Upload the formatted object data
-    print("Uploading data")  # Indicate the start of data upload
+    logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors that occur during upload
+        logging.error(e)  # Catch and print any errors that occur during upload
 
 def fill_data_property_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -931,7 +937,7 @@ def fill_data_property_copied_named_vectors():
 
 def data_property_collection_creation():
     # Get ontology property data from endpoint
-    print("Loading data")  # Indicate the start of data loading
+    logger.info("Loading data")  # Indicate the start of data loading
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="data_properties")
 
     # Mappings between model names (formatted_object to _ format) and model instances
@@ -950,13 +956,13 @@ def data_property_collection_creation():
     formatted_objects_for_upload = []  # List to hold formatted data property objects for upload
 
     # Formatting of the ontology data to upload to the collection
-    print("Generating embeddings and formatting data")  # Indicate the start of data formatting
+    logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
     for i, result_doc in enumerate(endpoint_query_results):
         tp = len(endpoint_query_results) / 10  # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            print(i, "/", len(endpoint_query_results))
+            logger.info(i, "/", len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
 
@@ -1001,7 +1007,7 @@ def data_property_collection_creation():
     client.collections.delete("DataProperties")
 
     # Create a new collection with the vectorizer configurations
-    print("Creating collection")  # Indicate that the collection is being created
+    logger.info("Creating collection")  # Indicate that the collection is being created
     collection = client.collections.create(
         name="DataProperties",
         description="Text2kg benchmark data properties",
@@ -1019,7 +1025,7 @@ def data_property_collection_creation():
     )
 
     # Upload the formatted object data
-    print("Uploading data")  # Indicate the start of data upload
+    logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = []
     for d in formatted_objects_for_upload:
         objects_to_upload.append(wvc.data.DataObject(
@@ -1028,20 +1034,17 @@ def data_property_collection_creation():
             uuid=d[2]
         ))
     
-    # Log domains for each object
-    for f in formatted_objects_for_upload:
-        print(f[0]["Domain"])  # Print the domain of each object
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
 
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
+            logger.info(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
 
     except Exception as e:
-        print(f"Error during insert_many: {e}")  # Catch and print any errors that occur during upload
+        logging.error(e)  # Catch and print any errors that occur during upload
 
 
 # RDFtype Collection Functions
@@ -1055,7 +1058,7 @@ def get_rdftype_collection_mappings():
     return models, methodologies
 
 def format_rdftype_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
-    print("Formatting objects")
+    logger.info("Formatting objects")
     formatted_objects = []
     for i, result_doc in enumerate(endpoint_query_results):
         formatted_object = {
@@ -1088,7 +1091,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
     return formatted_objects
 
 def create_rdftype_collection():
-    print("Creating RDF_types collection")
+    logger.info("Creating RDF_types collection")
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
 
     models, methodologies = get_rdftype_collection_mappings()
@@ -1108,13 +1111,13 @@ def create_rdftype_collection():
     all_named_vectors = set(all_named_vectors)  # Convert the list to a set to remove duplicates
 
     formatted_objects_for_upload = format_rdftype_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
-    print(formatted_objects_for_upload)
+
     # Configure vectorizer
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
     client.collections.delete("RDFtypes")
 
-    print("Creating collection")
+    logger.info("Creating collection")
     collection = client.collections.create(
             
             name="RDFtypes",
@@ -1135,16 +1138,16 @@ def create_rdftype_collection():
 
 
     # Upload the formatted object data
-    print("Uploading data")
+    logger.info("Uploading data")
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i + 1}")
+            logger.info(f"Uploading batch {i + 1}")
             collection.data.insert_many(batch)
     except Exception as e:
-        print(f"Error during insert_many: {e}")
+        logging.error(e)
 
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
@@ -1157,7 +1160,7 @@ def fill_rdftype_copied_named_vectors():
 
 def rdftype_collection_creation():
     # Get ontology property data from endpoint
-    print("Loading data")
+    logger.info("Loading data")
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
 
     ##print(ontologies)
@@ -1170,17 +1173,16 @@ def rdftype_collection_creation():
         for method in methodologies:
             for lang in languages:
                 all_combos.append({"case_name": f"{model}___{method}___{lang}","model": model, "method": method, "lang":lang})
-    print([x["case_name"] for x in all_combos])
 
     formatted_objects_for_upload = []
 
     # Formatting of the ontology data to upload to the collection
-    print("Generating embeddings and formatting data")
+    logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
         tp = len(endpoint_query_results) / 10
         
         if i % int(tp) == 0:
-            print(i, "/", len(endpoint_query_results))
+            logger.info(i, "/", len(endpoint_query_results))
             
         formatted_object = {}
         
@@ -1226,7 +1228,7 @@ def rdftype_collection_creation():
     client.collections.delete("RDFtypes")
 
     # Create a new collection with the vectorizer configs
-    print("Creating collection")
+    logger.info("Creating collection")
     collection = client.collections.create(
             name="RDFtypes",
             description="Text2kg benchmark RDF_types",
@@ -1246,7 +1248,7 @@ def rdftype_collection_creation():
 
     
     # # Upload the formatted_object data
-    print("Uploading data")
+    logger.info("Uploading data")
     objects_to_upload = []
     for d in formatted_objects_for_upload:
         objects_to_upload.append(wvc.data.DataObject(
@@ -1263,13 +1265,13 @@ def rdftype_collection_creation():
 
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i+1}")
+            logger.info(f"Uploading batch {i+1}")
             # Perform the insert operation
             #collection.data.insert_many(objects_to_upload)
             collection.data.insert_many(batch)
 
     except Exception as e:
-        print(f"Error during insert_many: {e}")
+        logging.error(e)
 
 
 
@@ -1288,7 +1290,7 @@ def fill_ontology_copied_named_vectors():
 
 def ontology_collection_creation():
     # Get ontology property data from endpoint
-    print("Loading data")
+    logger.info("Loading data")
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Ontologies")
 
     # Mappings between mapping methodology names and functions
@@ -1302,17 +1304,16 @@ def ontology_collection_creation():
             for lang in languages:
                 all_combos.append({"case_name": f"{model}___{method}___{lang}", "model": model, "method": method, "lang": lang})
 
-    print([x["case_name"] for x in all_combos])
 
     formatted_objects_for_upload = []
 
     # Formatting of the ontology data to upload to the collection
-    print("Generating embeddings and formatting data")
+    logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
         tp = len(endpoint_query_results) / 10
         if int(tp) > 1:
             if i % int(tp) == 0:
-                print(i, "/", len(endpoint_query_results))
+                logger.info(i, "/", len(endpoint_query_results))
 
         formatted_object = {}
 
@@ -1348,7 +1349,7 @@ def ontology_collection_creation():
     client.collections.delete("Ontologies")
 
     # Create a new collection with the vectorizer configs
-    print("Creating collection")
+    logger.info("Creating collection")
     collection = client.collections.create(
         name="Ontologies",
         description="Text2kg benchmark Ontologies",
@@ -1363,7 +1364,7 @@ def ontology_collection_creation():
 
 
     # Upload the formatted_object data
-    print("Uploading data")
+    logger.info("Uploading data")
     objects_to_upload = []
     for d in formatted_objects_for_upload:
         objects_to_upload.append(wvc.data.DataObject(
@@ -1377,11 +1378,11 @@ def ontology_collection_creation():
 
     try:
         for i, batch in enumerate(batches):
-            print(f"Uploading batch {i+1}")
+            logger.info(f"Uploading batch {i+1}")
             collection.data.insert_many(batch)
 
     except Exception as e:
-        print(f"Error during insert_many: {e}",  traceback.format_exc())
+        logging.error(e)
    
    
 
@@ -1404,23 +1405,23 @@ if __name__ == "__main__":
     try:
         
         create_object_property_collection()
-        create_data_property_collection()
+        # create_data_property_collection()
         create_class_collection()
-        create_rdftype_collection()
-        create_individuals_collection()
+        # create_rdftype_collection()
+        # create_individuals_collection()
         #create_ontology_collection()
-        print("END OF COLLECTION CREATION")
+        logger.info("END OF COLLECTION CREATION")
         for x in client.collections.list_all(simple=True):
             print(client.collections.get(name=x), "exists")
         fill_object_property_copied_named_vectors()
-        fill_data_property_copied_named_vectors()
-        fill_class_copied_named_vectors()
-        fill_rdftype_copied_named_vectors()
-        fill_individuals_copied_named_vectors()
+        # fill_data_property_copied_named_vectors()
+        # fill_class_copied_named_vectors()
+        # fill_rdftype_copied_named_vectors()
+        # fill_individuals_copied_named_vectors()
         #fill_ontology_copied_named_vectors()
 
     except Exception as e:
-        print("Error", e, traceback.format_exc())
+        logging.error(e)
         
     finally:
         client.close()
