@@ -1,6 +1,7 @@
 import os
 import weaviate
 from weaviate.auth import Auth
+from weaviate.classes.init import AdditionalConfig, Timeout
 from dotenv import load_dotenv
 import time
 import logging
@@ -33,7 +34,10 @@ def get_weaviate_client():
         grpc_port=grpc_port,
         grpc_secure=grpc_secure,
         auth_credentials=auth_credentials,
-        headers=headers
+        headers=headers,
+        additional_config=AdditionalConfig(
+        timeout=Timeout(init=30, query=60, insert=120)  # Values in seconds
+    )
     )
     return client
 

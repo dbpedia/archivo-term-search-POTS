@@ -15,7 +15,7 @@ import logging
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=f'{__name__}_ERRORS.log', encoding='utf-8', level=logging.error)
+logging.basicConfig(filename=f'{__name__}_ERRORS.log', encoding='utf-8', level=logging.ERROR)
 
 # Global variables
 wcd_url = os.getenv("WCD_URL")
