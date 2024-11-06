@@ -1092,7 +1092,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
 
 def create_rdftype_collection():
     logger.info("Creating RDF_types collection")
-    endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
+    endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="Datatypes")
 
     models, methodologies = get_rdftype_collection_mappings()
 
@@ -1100,7 +1100,7 @@ def create_rdftype_collection():
     for field_name in ["Label", "Description"]:
         for lang in languages:
             for model in models:
-                for copy_relationship, collection in [("Superclass", "RDFtypes")]:
+                for copy_relationship, collection in [("Superclass", "Datatypes")]:
 
                         all_combos.append([field_name, lang, model, "default", copy_relationship, collection])
 
@@ -1115,12 +1115,12 @@ def create_rdftype_collection():
     # Configure vectorizer
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
-    client.collections.delete("RDFtypes")
+    client.collections.delete("Datatypes")
 
     logger.info("Creating collection")
     collection = client.collections.create(
             
-            name="RDFtypes",
+            name="Datatypes",
             
             description="Text2kg benchmark RDF_types",
             
@@ -1150,18 +1150,18 @@ def create_rdftype_collection():
         logging.error(e)
 
 def fill_rdftype_copied_named_vectors():
-    all_objects = fetch_all_objects(collection="RDFtypes")
+    all_objects = fetch_all_objects(collection="Datatypes")
 
-    all_named_vectors = fetch_all_named_vectors(collection="RDFtypes")
+    all_named_vectors = fetch_all_named_vectors(collection="Datatypes")
     
     uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
     
-    fill_copied_named_vectors(uuid_to_nv_mappings, "RDFtypes")
+    fill_copied_named_vectors(uuid_to_nv_mappings, "Datatypes")
 
 def rdftype_collection_creation():
     # Get ontology property data from endpoint
     logger.info("Loading data")
-    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
+    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Datatypes")
 
     ##print(ontologies)
     # Mappings between mapping methodology names and functions
@@ -1225,12 +1225,12 @@ def rdftype_collection_creation():
     # TODO: modify above so some uri for "special models" 
 
     # Delete the last iteration of the collection (for testing purposes)
-    client.collections.delete("RDFtypes")
+    client.collections.delete("Datatypes")
 
     # Create a new collection with the vectorizer configs
     logger.info("Creating collection")
     collection = client.collections.create(
-            name="RDFtypes",
+            name="Datatypes",
             description="Text2kg benchmark RDF_types",
             
             vectorizer_config=vectorizer_config,

@@ -12,7 +12,7 @@ def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
         "ObjectProperties": get_object_properties,
         "Classes": get_classes,
         "Individuals": get_individuals,
-        "RDFtypes": get_rdf_datatypes,
+        "Datatypes": get_rdf_datatypes,
         "Ontologies": get_ontologies
     }
     return func_dict[type](url_endpoint)
