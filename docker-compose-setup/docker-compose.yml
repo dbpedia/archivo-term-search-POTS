@@ -11,11 +11,12 @@ services:
         CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
     depends_on:
       - weaviate
-    network_mode: "service:weaviate"
     env_file: compose-config.env
     environment:
       SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options to fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
       DELETE_OLD_INDEX: ${DELETE_OLD_INDEX}
+      WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
+      WEAVIATE_GRPC_URI: ${WEAVIATE_GRPC_URI:-http://weaviate:50051}
     command: >
       /bin/bash -c "source activate onto_search_env && sleep 5 && python VectorDB_creation.py"
 
@@ -26,15 +27,14 @@ services:
       dockerfile: docker-compose-setup/Dockerfile
       args:
         CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
-    network_mode: "service:weaviate"
     depends_on:
       - weaviate
-    # ports:
-    #   - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:9090"
+    ports:
+      - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:9090"
     env_file: compose-config.env
     environment:
-      WEAVIATE_PORT: ${WEAVIATE_PORT}
-      # WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+      WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
+      WEAVIATE_GRPC_URI: ${WEAVIATE_GRPC_URI:-http://weaviate:50051}
     command: >
       /bin/bash -c "source activate onto_search_env && sleep 5 && python API_main.py"
 

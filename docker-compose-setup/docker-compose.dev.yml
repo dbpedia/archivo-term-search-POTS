@@ -33,8 +33,8 @@ services:
       args:
         CODE_ORIGIN: copy_local
     network_mode: "service:weaviate"
-    environment:
-      WEAVIATE_PORT: ${WEAVIATE_PORT}
-      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+    # environment:
+    #   WEAVIATE_PORT: ${WEAVIATE_PORT}
+    #   WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
       /bin/bash -c "source activate onto_search_env && env && sleep infinity"
