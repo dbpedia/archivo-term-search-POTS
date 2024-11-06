@@ -6,6 +6,7 @@ from langchain_community.embeddings import SentenceTransformerEmbeddings
 from VectorDB_creation_aux import *
 from dotenv import load_dotenv
 import os
+import sys
 import traceback
 from dataclasses import dataclass, field
 from typing import List
@@ -28,6 +29,8 @@ url_endpoint =  os.getenv("SPARQL_ENDPOINT")
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
 
+
+exception_happened = False
 
 # Available models
 # model_names = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
@@ -152,7 +155,7 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
     collection = client.collections.get(name=target_collection)
 
     # Calculate the progress interval for logging
-    tp = len(uuid_to_nv_mappings) / 10
+    tp = max(len(uuid_to_nv_mappings) / 10, 1)
     for i, uuid in enumerate(uuid_to_nv_mappings):
         if i % int(tp) == 0:
             logger.info(i, "/", len(uuid_to_nv_mappings))
@@ -301,6 +304,8 @@ def create_object_property_collection():
             collection.data.insert_many(batch)
     except Exception as e:
         logging.error("Error during insert_many: %s", exc_info=e)
+        exception_happened = True
+        
 
 def fill_object_property_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -431,7 +436,8 @@ def create_class_collection():
             logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e)  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        exception_happened = True
 
 def fill_class_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -490,7 +496,7 @@ def class_collection_creation_hf_integration():
     # Formatting of the ontology data to upload to the collection
     logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
-        tp = len(endpoint_query_results) / 10  # Progress tracker
+        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
@@ -561,7 +567,7 @@ def class_collection_creation_hf_integration():
 
     except Exception as e:
         logging.exception(e)  # Catch and print any errors during upload
-
+        exception_happened = True
 # Individual Collection Functions
 
 def get_individuals_collection_mappings():
@@ -678,7 +684,8 @@ def create_individuals_collection():
             logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e)  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        exception_happened = True
 
 def fill_individuals_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -721,7 +728,7 @@ def individual_collection_creation():
     # Formatting of the ontology data to upload to the collection
     logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
     for i, result_doc in enumerate(endpoint_query_results):
-        tp = len(endpoint_query_results) / 10  # Progress tracker
+        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
@@ -804,7 +811,8 @@ def individual_collection_creation():
             logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e)  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        exception_happened = True
 
 
 # Data Property Collection Functions
@@ -922,7 +930,8 @@ def create_data_property_collection():
             logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e)  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        exception_happened = True
 
 def fill_data_property_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -959,7 +968,7 @@ def data_property_collection_creation():
     # Formatting of the ontology data to upload to the collection
     logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
     for i, result_doc in enumerate(endpoint_query_results):
-        tp = len(endpoint_query_results) / 10  # Progress tracker
+        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
         
         # Log progress every 10%
         if i % int(tp) == 0:
@@ -1045,7 +1054,8 @@ def data_property_collection_creation():
             collection.data.insert_many(batch)  # Insert the batch into the collection
 
     except Exception as e:
-        logging.error(e)  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        exception_happened = True
 
 
 # RDFtype Collection Functions
@@ -1148,7 +1158,8 @@ def create_rdftype_collection():
             logger.info(f"Uploading batch {i + 1}")
             collection.data.insert_many(batch)
     except Exception as e:
-        logging.error(e)
+        logging.error(e, traceback.format_exc())
+        exception_happened = True
 
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
@@ -1180,7 +1191,7 @@ def rdftype_collection_creation():
     # Formatting of the ontology data to upload to the collection
     logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
-        tp = len(endpoint_query_results) / 10
+        tp = max(len(endpoint_query_results) / 10, 1)
         
         if i % int(tp) == 0:
             logger.info(i, "/", len(endpoint_query_results))
@@ -1272,7 +1283,8 @@ def rdftype_collection_creation():
             collection.data.insert_many(batch)
 
     except Exception as e:
-        logging.error(e)
+        logging.error(e, traceback.format_exc())
+        exception_happened = True
 
 
 
@@ -1311,7 +1323,7 @@ def ontology_collection_creation():
     # Formatting of the ontology data to upload to the collection
     logger.info("Generating embeddings and formatting data")
     for i, result_doc in enumerate(endpoint_query_results):
-        tp = len(endpoint_query_results) / 10
+        tp = max(len(endpoint_query_results) / 10, 1)
         if int(tp) > 1:
             if i % int(tp) == 0:
                 logger.info(i, "/", len(endpoint_query_results))
@@ -1383,7 +1395,8 @@ def ontology_collection_creation():
             collection.data.insert_many(batch)
 
     except Exception as e:
-        logging.error(e)
+        logging.error(e, traceback.format_exc())
+        exception_happened = True
    
    
 
@@ -1422,7 +1435,12 @@ if __name__ == "__main__":
         #fill_ontology_copied_named_vectors()
 
     except Exception as e:
-        logging.error(e)
+        logging.error(e, traceback.format_exc())
+        exception_happened = True
         
     finally:
+        if exception_happened:
+            sys.exit(1)
+        
         client.close()
+        sys.exit(0)
