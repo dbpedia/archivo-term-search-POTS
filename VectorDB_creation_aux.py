@@ -223,12 +223,12 @@ def get_classes(url_endpoint):
     PREFIX terms: <http://purl.org/dc/terms/>
 
     SELECT DISTINCT ?term 
-        (GROUP_CONCAT(DISTINCT ?label; SEPARATOR="--||||--||||--") AS ?label)
+        (COALESCE(?label, ?name, ?prefLabel, ?title, ?description) AS ?label)
         (GROUP_CONCAT(DISTINCT ?subclass; SEPARATOR=", ") AS ?subclasses)
         (GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
         ?description ?ontology
     WHERE {
-        ?term a owl:Class .
+        ?term a owl:Class . 
         FILTER(!isBlank(?term))  # Exclude blank nodes
 
         OPTIONAL { ?subclass rdfs:subClassOf ?term . FILTER(!isBlank(?subclass)) }
@@ -237,17 +237,18 @@ def get_classes(url_endpoint):
         BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
 
         OPTIONAL { 
-            { ?term rdfs:label ?label . }
-            UNION { ?term foaf:name ?label . }
-            UNION { ?term skos:prefLabel ?label . }
-            UNION { ?term dc:title ?label . }
-            UNION { ?term dcterms:title ?label . }
+            ?term rdfs:label ?label .
+            OPTIONAL { ?term foaf:name ?name . }
+            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
+            OPTIONAL { ?term dc:title ?title . }
+            OPTIONAL { ?term dcterms:title ?title . }
         }
 
         OPTIONAL { ?term terms:description ?description . }
         OPTIONAL { ?term rdfs:comment ?description . }
     }
-    GROUP BY ?term ?description ?ontology 
+    GROUP BY ?term ?description ?ontology
+
 
     """
 
