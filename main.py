@@ -74,7 +74,8 @@ def get_ontology_names(url_endpoint):
 # "ont_1_university",
 # "ont_14_writtenwork"]
 all_ontologies = get_ontology_names(url_endpoint)
-model_list = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
+#model_list = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
+model_list = ["LaBSE"]
 with open("test_qa.txt", "w") as f:
     pass   
 with open("logs.json", "w") as f:

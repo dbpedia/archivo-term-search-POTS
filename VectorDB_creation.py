@@ -30,7 +30,8 @@ create_new = os.getenv("DELETE_OLD_INDEX")
 
 
 # Available models
-model_names = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
+# model_names = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
+model_names = ["LaBSE"]
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
 languages = ["en", "fr", "None"]

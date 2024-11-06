@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  weaviate:
+    environment:
+      ENABLE_API_BASED_MODULES: 'true' # enable API based modules like text2vec-huggingface text2vec-openai etc.
+      ENABLE_MODULES: 'ner-transformers,reranker-cohere,reranker-transformers,ref2vec-centroid,generative-openai,generative-cohere,generative-palm,generative-aws,generative-mistral,generative-anthropic,generative-databricks,generative-friendliai,generative-ollama,generative-anyscale'
+      
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-huggingface'
+
+      NER_INFERENCE_API: 'http://ner-transformers:8080'
+      RERANKER_INFERENCE_API: 'http://reranker-transformers:8080'
+
+  
+  ner-transformers:
+    image: cr.weaviate.io/semitechnologies/ner-transformers:dbmdz-bert-large-cased-finetuned-conll03-english
+    environment:
+      ENABLE_CUDA: '0'
+      
+  ollama:
+    image: ollama/ollama
+
+  reranker-transformers:
+    image: cr.weaviate.io/semitechnologies/reranker-transformers:cross-encoder-ms-marco-TinyBERT-L-2-v2
+    environment:
+      ENABLE_CUDA: '0'

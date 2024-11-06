@@ -4,18 +4,19 @@ services:
 
 # mount/overwrite local copy of code/repo baked into image with live state of the code without need to rebuild image
   indexer:
-    build:
-      args:
-        CODE_ORIGIN: copy_local
+    # build: # build the image not from GitHub but from local code (required when changes to dependencies were made)
+    #   args:
+    #     CODE_ORIGIN: copy_local
     volumes:
       - ../:/onto-search
+
   api:
-    build:
-      args:
-        CODE_ORIGIN: copy_local
+    # build: # build the image not from GitHub but from local code (required when changes to dependencies were made)
+    #   args:
+    #     CODE_ORIGIN: copy_local
     volumes:
       - ../:/onto-search
-    
+
   weaviate-gui:
     profiles: [indexing, serve-api]
     image: naaive/weaviate-ui:latest

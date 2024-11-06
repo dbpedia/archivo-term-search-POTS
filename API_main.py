@@ -34,8 +34,8 @@ client = get_weaviate_client()
  
 create_new = False
 
-models = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
-
+# models = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
+models = ["LaBSE"]
 
 # # Mappings between model names (formatted to _ format) and model instances
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in models}
