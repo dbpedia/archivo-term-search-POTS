@@ -26,6 +26,7 @@ services:
       # WEAVIATE_API_KEYS: secret
 
   manual-checks-dummy:
+    profiles: [indexing, serve-api]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
