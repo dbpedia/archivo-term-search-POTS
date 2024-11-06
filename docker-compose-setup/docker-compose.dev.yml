@@ -16,7 +16,17 @@ services:
     volumes:
       - ../:/onto-search
     
+  weaviate-gui:
+    profiles: [indexing, serve-api]
+    image: naaive/weaviate-ui:latest
+    ports: 
+      - "${WEAVIATE_GUI_EXPOSED_PORT:-127.0.0.1:7777}:7777" # only expose for debugging purposes !!!
+    environment:
+      WEAVIATE_URL: http://weaviate:8080
+      # WEAVIATE_API_KEYS: secret
+
   manual-checks-dummy:
+    profiles: [indexing, serve-api]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
