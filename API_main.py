@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 from weaviate_client import get_weaviate_client
+import logging
 
-# TODO: Uncomment below
 app = Flask(__name__)
 
 # Enable CORS for all routes
@@ -28,6 +28,9 @@ hf_key = os.getenv("HF_KEY")
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE")
 DEFAULT_LIMIT = int(os.getenv("DEFAULT_NO_OF_SEARCH_RESULTS"))
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename=f'{__name__}_ERRORS.log', encoding='utf-8', level=logging.ERROR)
 
 # Create a client instance
 client = get_weaviate_client()
@@ -123,7 +126,7 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
     signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
     reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
     
-    hybrid_property_str = hybrid_property.get("query", None)
+    hybrid_property_str = hybrid_property
     
     # Get the collection object from the client (Assuming `client` is properly initialized)
     collection = client.collections.get(name=collections_translation[target_collection])
@@ -191,7 +194,7 @@ def query_collection(model_name, target_collection, signature_properties_to_cons
             ).objects
         
     
-    return [(x.properties, x.metadata.distance) for x in results]
+    return [{"object": x.properties, "distance": x.metadata.distance} for x in results]
         
     # except Exception as e:
     #     print(e)
@@ -208,7 +211,7 @@ def pure_exact_search(exact_filters):
     for collection_name in target_collections:
         collection_name = collections_translation[collection_name]
 
-        results[collection_name] = [(x.properties, "None") for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters, limit=DEFAULT_LIMIT).objects]
+        results[collection_name] = [{"object": x.properties, "distance": "N/A"} for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters, limit=DEFAULT_LIMIT).objects]
         
     return results
         
@@ -239,8 +242,11 @@ def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_prop
     
     else:
         for collection_name in collections_translation:
-            results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
-    
+            try:
+                results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
+            except Exception as e:
+                logging.error("Failed to fetch data from %s: %s\n%s", collection_name, e, traceback.format_exc())
+                results[collection_name] = "Error: Failed to fetch data from the collection"
     return results
     
 def search(data):
@@ -268,16 +274,20 @@ def search(data):
 
 @app.route('/search', methods=['POST'])
 def search_endpoint():
-    data = request.json
+    try:
+        data = request.json
 
-    # Validate filters
-    is_valid, error_message = validate_filters(data)
-    if not is_valid:
-        return jsonify({"error": error_message}), 400
+        # Validate filters
+        is_valid, error_message = validate_filters(data)
+        if not is_valid:
+            return jsonify({"error": error_message}), 400
 
-    # Proceed with search operation
-    results, status_code = search(data)
-    return jsonify(results), status_code
+        # Proceed with search operation
+        results, status_code = search(data)
+        return jsonify(results), status_code
+    except Exception as e:
+        logging.error(e, traceback.format_exc())
+        return jsonify("Internal server error"), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=9090)
