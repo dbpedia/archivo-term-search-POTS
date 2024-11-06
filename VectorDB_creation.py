@@ -9,6 +9,7 @@ import os
 import traceback
 from dataclasses import dataclass, field
 from typing import List
+from weaviate_client import get_weaviate_client
 load_dotenv()
 
 # Global variables
@@ -17,8 +18,8 @@ wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 url_endpoint =  os.getenv("SPARQL_ENDPOINT")
-weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+# weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+# weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
 
@@ -1393,21 +1394,11 @@ def ontology_collection_creation():
 
 
 # Create a client instance
-headers = {
-    "X-HuggingFace-Api-Key": hf_key,
-}
+
 
 
 if __name__ == "__main__":
-
-    client = weaviate.connect_to_embedded(
-        hostname="localhost",
-        port=weaviate_port,
-        grpc_port=weaviate_port_grpc,
-        headers=headers
-        
-    )
-
+    client = get_weaviate_client()
     client.collections.delete_all()
 
     try:

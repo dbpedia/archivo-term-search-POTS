@@ -10,6 +10,7 @@ from VectorDB_creation_aux import *
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+from weaviate_client import get_weaviate_client
 
 # TODO: Uncomment below
 app = Flask(__name__)
@@ -22,23 +23,14 @@ wcd_url = os.getenv("WCD_URL")
 wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
-weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
+# weaviate_port = int(os.getenv("WEAVIATE_PORT"))
+# weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE")
-DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT"))
+DEFAULT_LIMIT = int(os.getenv("DEFAULT_NO_OF_SEARCH_RESULTS"))
 
 # Create a client instance
-headers = {
-    "X-HuggingFace-Api-Key": hf_key,
-}
-client = weaviate.connect_to_embedded(
-    hostname=weaviate_address,
-    port=weaviate_port,
-    grpc_port=weaviate_port_grpc,
-    headers=headers
-
-)
+client = get_weaviate_client()
  
 create_new = False
 

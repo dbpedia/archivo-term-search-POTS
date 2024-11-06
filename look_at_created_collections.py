@@ -9,6 +9,7 @@ import os
 import traceback
 from dataclasses import dataclass, field
 from typing import List
+from weaviate_client import get_weaviate_client
 load_dotenv()
 
 # Global variables
@@ -29,13 +30,7 @@ headers = {
 }
  
         
-client = weaviate.connect_to_embedded(
-    hostname=weaviate_address,
-    port=weaviate_port,
-    grpc_port=weaviate_port_grpc,
-    headers=headers
-
-)
+client = get_weaviate_client()
 
 for x in client.collections.list_all(simple=True):
     print(client.collections.get(name=x).name, "exists")

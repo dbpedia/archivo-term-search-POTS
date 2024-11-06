@@ -12,13 +12,12 @@ services:
     depends_on:
       - weaviate
     network_mode: "service:weaviate"
+    env_file: compose-config.env
     environment:
       SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options to fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
-      WEAVIATE_PORT: ${WEAVIATE_PORT}
-      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
       DELETE_OLD_INDEX: ${DELETE_OLD_INDEX}
     command: >
-      /bin/bash -c "source activate onto_search_env && sleep 20 && python VectorDB_creation.py"
+      /bin/bash -c "source activate onto_search_env && sleep 5 && python VectorDB_creation.py"
 
   api:
     profiles: [serve-api]
@@ -32,13 +31,13 @@ services:
       - weaviate
     # ports:
     #   - "9091:9090"
+    env_file: compose-config.env
     environment:
       WEAVIATE_PORT: ${WEAVIATE_PORT}
-      WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
+      # WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
-      /bin/bash -c "source activate onto_search_env && sleep 20 && python API_main.py"
-  
-  # using text2vec TRANSFORMERS_INFERENCE_API base on docker container running hugingface transformers api endpoint
+      /bin/bash -c "source activate onto_search_env && sleep 5 && python API_main.py"
+
   weaviate:
     profiles: [indexing, serve-api]
     command:
@@ -59,18 +58,4 @@ services:
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      TRANSFORMERS_INFERENCE_API: 'http://prebuilt-t2v-transformers-model:8080'
-      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
-      ENABLE_API_BASED_MODULES: 'true'
-      ENABLE_MODULES: 'text2vec-transformers'
       CLUSTER_HOSTNAME: 'node1'
-
-  prebuilt-t2v-transformers-model:
-    profiles: [indexing, serve-api]
-    # for pre-built images from weaviate see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
-    image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
-    environment:
-      ENABLE_CUDA: '0'
-      # OPENBLAS_NUM_THREADS: 8
-    security_opt: # todo this needs to be refined
-      - seccomp:unconfined
