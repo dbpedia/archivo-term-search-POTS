@@ -2,7 +2,7 @@
 # you can use on of the examples service as template; change the service-name and adjust MODEL_NAME, exposed ports (if needed) and optionally environment var for startup of the model
 # showcased here are 2 transformers models, one of them is a sentence-transformers model, the other one is a regular on
 
-version: '2.4'
+version: '3.8'
 
 services:
   weaviate:

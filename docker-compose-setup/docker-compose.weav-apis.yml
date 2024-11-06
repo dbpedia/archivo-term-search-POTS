@@ -1,7 +1,7 @@
 # this compose drop-in has the purpose to enable the usage of multiple models hosted via commercial APIs in Weaviate 
 # also it is needed to pass through the API keys when they are only provided as environment var to the docker-compose command
 
-version: '2.4'
+version: '3.8'
 services:
   weaviate:
     # env_file: ## pass through the api keys from the api-keys.env file that can be temporarily created by the user

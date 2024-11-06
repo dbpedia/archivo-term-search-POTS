@@ -1,0 +1,22 @@
+# template/example drop-in file for onto-search setup with self-deployable text2vec-transformers using prebuilt weaviate images
+
+version: '3.8'
+
+services:
+ 
+  # using text2vec TRANSFORMERS_INFERENCE_API based on docker container running hugingface transformers api endpoint
+  weaviate:
+    environment:
+      TRANSFORMERS_INFERENCE_API: 'http://prebuilt-t2v-transformers-model:8080'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_MODULES: 'text2vec-transformers'
+
+  prebuilt-t2v-transformers-model:
+    profiles: [indexing, serve-api]
+    # for pre-built images from weaviate see https://cr.weaviate.io/v2/semitechnologies/transformers-inference/tags/list
+    image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-mpnet-base-cos-v1-1.9.6
+    environment:
+      ENABLE_CUDA: '0'
+      # OPENBLAS_NUM_THREADS: 8
+    security_opt: # todo this needs to be refined
+      - seccomp:unconfined
