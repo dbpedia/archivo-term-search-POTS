@@ -5,9 +5,11 @@ from weaviate.classes.init import AdditionalConfig, Timeout
 from dotenv import load_dotenv
 import time
 import logging
+import contextlib
 
 load_dotenv()
 
+@contextlib.contextmanager
 def get_weaviate_client():
     weaviate_api_uri = os.getenv("WEAVIATE_API_URI")
     weaviate_grpc_uri = os.getenv("WEAVIATE_GRPC_URI")
@@ -39,7 +41,10 @@ def get_weaviate_client():
         timeout=Timeout(init=30, query=60, insert=120)  # Values in seconds
     )
     )
-    return client
+    try:
+        yield client
+    finally:
+        client.close()
 
 def parse_uri(uri):
     if uri.startswith("https://"):

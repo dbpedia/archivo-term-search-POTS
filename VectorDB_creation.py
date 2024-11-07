@@ -436,7 +436,7 @@ def create_class_collection():
             logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logging.error(e, traceback.format_exc())  # Catch and print any errors during upload
         exception_happened = True
 
 def fill_class_copied_named_vectors():
@@ -1413,34 +1413,32 @@ def ontology_collection_creation():
 
 
 if __name__ == "__main__":
-    client = get_weaviate_client()
-    client.collections.delete_all()
+    with get_weaviate_client() as client:
+        client.collections.delete_all()
 
-    try:
-        
-        create_object_property_collection()
-        # create_data_property_collection()
-        create_class_collection()
-        # create_rdftype_collection()
-        # create_individuals_collection()
-        #create_ontology_collection()
-        logger.info("END OF COLLECTION CREATION")
-        for x in client.collections.list_all(simple=True):
-            print(client.collections.get(name=x), "exists")
-        fill_object_property_copied_named_vectors()
-        # fill_data_property_copied_named_vectors()
-        # fill_class_copied_named_vectors()
-        # fill_rdftype_copied_named_vectors()
-        # fill_individuals_copied_named_vectors()
-        #fill_ontology_copied_named_vectors()
+        try:
+            create_object_property_collection()
+            # create_data_property_collection()
+            create_class_collection()
+            # create_rdftype_collection()
+            # create_individuals_collection()
+            # create_ontology_collection()
+            logger.info("END OF COLLECTION CREATION")
+            for x in client.collections.list_all(simple=True):
+                print(client.collections.get(name=x), "exists")
+            fill_object_property_copied_named_vectors()
+            # fill_data_property_copied_named_vectors()
+            # fill_class_copied_named_vectors()
+            # fill_rdftype_copied_named_vectors()
+            # fill_individuals_copied_named_vectors()
+            # fill_ontology_copied_named_vectors()
 
-    except Exception as e:
-        logging.error(e, traceback.format_exc())
-        exception_happened = True
-        
-    finally:
-        if exception_happened:
-            sys.exit(1)
-        
-        client.close()
-        sys.exit(0)
+        except Exception as e:
+            logging.error(e, traceback.format_exc())
+            exception_happened = True
+
+        finally:
+            if exception_happened:
+                sys.exit(1)
+
+            sys.exit(0)
