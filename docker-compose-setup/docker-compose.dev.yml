@@ -18,13 +18,16 @@ services:
       - ../:/onto-search
 
   weaviate-gui:
-    profiles: [indexing, serve-api]
+    profiles: [serve-api]
     image: naaive/weaviate-ui:latest
     ports: 
       - "${WEAVIATE_GUI_EXPOSED_PORT:-127.0.0.1:7777}:7777" # only expose for debugging purposes !!!
     environment:
       WEAVIATE_URL: http://weaviate:8080
       # WEAVIATE_API_KEYS: secret
+    depends_on: 
+      - weaviate
+    restart: on-failure:3
 
   manual-checks-dummy:
     profiles: [indexing, serve-api]
@@ -33,9 +36,8 @@ services:
       dockerfile: docker-compose-setup/Dockerfile
       args:
         CODE_ORIGIN: copy_local
-    network_mode: "service:weaviate"
     # environment:
     #   WEAVIATE_PORT: ${WEAVIATE_PORT}
     #   WEAVIATE_PORT_GRPC: ${WEAVIATE_PORT_GRPC}
     command: >
-      /bin/bash -c "source activate onto_search_env && env && sleep infinity"
+      /bin/bash -c "env && source activate onto_search_env && env && sleep infinity"
