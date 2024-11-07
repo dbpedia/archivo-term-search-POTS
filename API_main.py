@@ -209,9 +209,8 @@ def pure_exact_search(exact_filters):
     results = {}
     
     for collection_name in target_collections:
-        collection_name = collections_translation[collection_name]
 
-        results[collection_name] = [{"object": x.properties, "distance": "N/A"} for x in client.collections.get(name=collection_name).query.fetch_objects(filters=filters, limit=DEFAULT_LIMIT).objects]
+        results[collection_name] = [{"object": x.properties, "distance": "N/A"} for x in client.collections.get(name=collections_translation[collection_name]).query.fetch_objects(filters=filters, limit=DEFAULT_LIMIT).objects]
         
     return results
         
@@ -243,10 +242,10 @@ def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_prop
     else:
         for collection_name in collections_translation:
             try:
-                results[collection_name] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
+                results[collections_translation[collection_name]] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
             except Exception as e:
                 logging.error("Failed to fetch data from %s: %s\n%s", collection_name, e, traceback.format_exc())
-                results[collection_name] = "Error: Failed to fetch data from the collection"
+                results[collections_translation[collection_name]] = "Error: Failed to fetch data from the collection"
     return results
     
 def search(data):

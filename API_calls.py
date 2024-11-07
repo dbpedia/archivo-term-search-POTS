@@ -40,7 +40,7 @@ perform_search_case(data, case_name)
 
 case_name = "Complex exact filtering"
 data = {
-    "exact_filters": {"termtype": "ObjectProperty", "domain": 'http://www.demcare.eu/ontologies/demlab.owl#Protocol'}
+    "exact_filters": {"termtype": "ObjectProperty", "domain": 'http://www.example.lirb.com/Person'}
 }
 perform_search_case(data, case_name)
 
@@ -48,8 +48,8 @@ perform_search_case(data, case_name)
 case_name = "Complex fuzzy filtering"
 
 data = {
-    "fuzzy_filters": {"label": "date", "domain": "creative work"},
-    "fuzzy_filters_config": {"model_name": "LaBSE"},
+    "fuzzy_filters": {"label": "works at"},
+    "fuzzy_filters_config": {"model_name": "LaBSE"},#, "hybrid_search_field": "label"},
     "exact_filters": {"termtype": "ObjectProperty"}
 }
 perform_search_case(data, case_name)

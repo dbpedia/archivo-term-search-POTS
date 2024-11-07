@@ -29,10 +29,13 @@ headers = {
     "X-HuggingFace-Api-Key": hf_key,
 }
  
-        
 client = get_weaviate_client()
 
-for x in client.collections.list_all(simple=True):
-    print(client.collections.get(name=x).name, "exists")
-    
+for collection_name in client.collections.list_all(simple=True):
+    collection = client.collections.get(name=collection_name)
+    print(f"Objects in collection '{collection.name}':")
+    for obj in collection.iterator():
+        print(obj.properties)
+    print("---")
+
 client.close()
