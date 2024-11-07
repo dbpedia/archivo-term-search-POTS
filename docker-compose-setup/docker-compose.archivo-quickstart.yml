@@ -26,7 +26,9 @@ services:
   store: 
     profiles: [prepare-indexing, autoloading, loading, indexing]
     image: openlink/virtuoso-opensource-7
-    # ports: ["${VIRTUOSO_HTTP_PORT}:8890","127.0.0.1:${VIRTUOSO_ISQL_PORT}:1111"] # only expose for debugging purposes
+    ports: ["${VIRTUOSO_HTTP_PORT}:8890",
+          # "127.0.0.1:${VIRTUOSO_ISQL_PORT}:1111"
+          ] # only expose for debugging purposes
     env_file: compose-config.env
     environment:
             DBA_PASSWORD: ${VIRTUOSO_ADMIN_PASSWD:?Set VIRTUOSO_ADMIN_PASSWD in .env file or pass as environment variable e.g. VIRTUOSO_ADMIN_PASSWD=YourSecretPass docker-compose up}
