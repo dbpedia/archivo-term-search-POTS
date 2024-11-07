@@ -8,8 +8,14 @@ if [ ! -d /app/models ] || [ -z "$(ls -A /app/models)" ]; then
   echo "Starting download script ..." &&
   ./download.py
 else
-  echo "Using model already downloaded and persisted in volume" &&
+  echo "Will NOT download model: Found existing model already downloaded and persisted in volume:" &&
   echo "Last modification date $(stat -c %y /app/models) and total size of the folder  $(du -sh /app/models | cut -f1)"
   [ -f /app/models/model/config.json ] && cat /app/models/model/config.json || echo "no config to display"
-fi &&
+fi
+
+if [ "$EXIT_AFTER_DOWNLOAD" = "1" ]; then
+  echo "Download phase completed. Exiting as per EXIT_AFTER_DOWNLOAD flag."
+  exit 0
+fi
+
 uvicorn app:app --host 0.0.0.0 --port 8080
