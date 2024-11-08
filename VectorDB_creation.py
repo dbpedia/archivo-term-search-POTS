@@ -52,7 +52,7 @@ weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
 empty_property_embedding_strategy = os.getenv("EMPTY_PROPERTY_EMBEDDING_STRATEGY")
 
-
+global exception_happened
 exception_happened = False
 
 # Available models
@@ -1457,19 +1457,21 @@ if __name__ == "__main__":
 
         try:
             create_object_property_collection()
-            # create_data_property_collection()
+            create_data_property_collection()
             create_class_collection()
-            # create_rdftype_collection()
-            # create_individuals_collection()
+            create_rdftype_collection()
+            create_individuals_collection()
             # create_ontology_collection()
+            
             logger.info("END OF COLLECTION CREATION")
             for x in client.collections.list_all(simple=True):
                 print(client.collections.get(name=x), "exists")
+            
             fill_object_property_copied_named_vectors()
-            # fill_data_property_copied_named_vectors()
-            # fill_class_copied_named_vectors()
-            # fill_rdftype_copied_named_vectors()
-            # fill_individuals_copied_named_vectors()
+            fill_data_property_copied_named_vectors()
+            fill_class_copied_named_vectors()
+            fill_rdftype_copied_named_vectors()
+            fill_individuals_copied_named_vectors()
             # fill_ontology_copied_named_vectors()
 
         except Exception as e:
