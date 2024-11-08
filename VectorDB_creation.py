@@ -7,6 +7,7 @@ from VectorDB_creation_aux import *
 from dotenv import load_dotenv
 import os
 import sys
+import numpy as np
 import traceback
 from dataclasses import dataclass, field
 from typing import List
@@ -15,8 +16,29 @@ import logging
 
 load_dotenv()
 
+# Create a logger
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=f'{__name__}_ERRORS.log', encoding='utf-8', level=logging.ERROR)
+logger.setLevel(logging.DEBUG)  # Set the root logger to DEBUG to capture all log levels
+
+# Create handlers
+console_handler = logging.StreamHandler()
+file_handler = logging.FileHandler('error_logs.log', mode='a', encoding='utf-8')
+
+# Create formatters
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Set the log level for each handler
+console_handler.setLevel(logging.INFO)  # Info level and above for console
+file_handler.setLevel(logging.ERROR)    # Error level and above for file
+
+# Set the formatter for each handler
+console_handler.setFormatter(console_formatter)
+file_handler.setFormatter(file_formatter)
+
+# Add the handlers to the logger
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
 
 # Global variables
 wcd_url = os.getenv("WCD_URL")
@@ -28,6 +50,7 @@ url_endpoint =  os.getenv("SPARQL_ENDPOINT")
 # weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
+empty_property_embedding_strategy = os.getenv("EMPTY_PROPERTY_EMBEDDING_STRATEGY")
 
 
 exception_happened = False
@@ -102,51 +125,67 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
     # Initialize dictionaries to hold embeddings and empty embeddings
     embeddings = {}
     empty_embeddings = {}
-    
-    for formatted_object in all_objects:
-    #     print("\n---------------------------------------------------")
-    #     print("New Object")
-    #     print("Object IRI:", formatted_object.properties["termIRI"])
-    #     print("Object label:", formatted_object.properties["label"])
 
+    for formatted_object in all_objects:
         # Ensure a dictionary exists for each object's UUID
-        if not formatted_object.uuid in embeddings:
+        if formatted_object.uuid not in embeddings:
             embeddings[formatted_object.uuid] = {}
-            
+
         for vector in all_named_vectors:
-            # print("")
-            # print("Search in vector", vector)
             if "___CP_SEPARATOR___" in vector:
                 # Split the vector name to extract original and copy info
                 original_vector_info, copy_vector_info = vector.split("___CP_SEPARATOR___")
                 property_to_find, target_collection, index = copy_vector_info.split("___")
                 vectorizer = vector.split("___")[0]
                 prop = vector.split("___")[1]
-                
+
                 # Initialize empty embeddings if they haven't been created yet
-                if not vectorizer in empty_embeddings:
+                if vectorizer not in empty_embeddings:
                     empty_embeddings[vectorizer] = generate_empty_embedding(models[vectorizer])
-                
+
                 property_to_find = property_to_find.lower()
-                
+
                 # Check if the property exists in the object's properties
                 if len(formatted_object.properties[property_to_find]) >= int(index):
-                    #print("Looking to find", property_to_find)
+
                     target_uri = formatted_object.properties[property_to_find][int(index)-1]
 
                     # Query the collection for the named vector embedding
                     result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info)
-                    
+
                     if result:
                         # Store the result in the embeddings dictionary
                         embeddings[formatted_object.uuid][vector] = result
-                        #print("Set", formatted_object.properties["termIRI"], "to", target_uri,"'s", prop) 
+ 
+
                     else:
-                        # If no result found, use an empty embedding
+                        # If the result is not found, use an empty embedding
                         embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
+
                 else:
-                    # If the index is out of bounds, use an empty embedding
-                    embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
+                    if empty_property_embedding_strategy == "empty":
+                        # If the property index is out of range, use an empty embedding
+                        embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
+                    elif empty_property_embedding_strategy == "average":
+                        if int(index) > 1:
+                            # If the property index is out of range, fall back to average of previous vectors
+                            previous_vectors = []
+                            for i in range(1, int(index)):
+                                # Find vectors with the same property, vectorizer, and lower index
+                                previous_vector_name = vector[:-1]+str(i)
+
+                                if previous_vector_name in embeddings[formatted_object.uuid]:
+                                    previous_vectors.append(embeddings[formatted_object.uuid][previous_vector_name])
+
+                            if previous_vectors:
+                                # Compute the average of the previous vectors
+                                embeddings[formatted_object.uuid][vector] = np.mean(previous_vectors, axis=0)
+                            else:
+                                
+                                logger.error("No previous vectors found for %s, this should not happen", vector)
+                                print(vector)
+                                raise Exception
+
                         
     return embeddings  # Return the mappings of UUIDs to named vector embeddings
 
@@ -158,7 +197,7 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
     tp = max(len(uuid_to_nv_mappings) / 10, 1)
     for i, uuid in enumerate(uuid_to_nv_mappings):
         if i % int(tp) == 0:
-            logger.info(i, "/", len(uuid_to_nv_mappings))
+            logger.info("%d / %d", i, len(uuid_to_nv_mappings))
         if uuid_to_nv_mappings[uuid]:
             # Update the collection with the vector mappings
             collection.data.update(uuid, vector=uuid_to_nv_mappings[uuid])
@@ -300,10 +339,10 @@ def create_object_property_collection():
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")
+            logger.info("Uploading batch %d", i + 1)
             collection.data.insert_many(batch)
     except Exception as e:
-        logging.error("Error during insert_many: %s", exc_info=e)
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
 
@@ -433,10 +472,10 @@ def create_class_collection():
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors during upload
+        logger.error(e, traceback.format_exc())  # Catch and print any errors during upload
         exception_happened = True
 
 def fill_class_copied_named_vectors():
@@ -500,7 +539,7 @@ def class_collection_creation_hf_integration():
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            logger.info(i, "/", len(endpoint_query_results))
+            logger.info("%d / %d", i, len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
 
@@ -562,11 +601,11 @@ def class_collection_creation_hf_integration():
 
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
+            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
 
     except Exception as e:
-        logging.exception(e)  # Catch and print any errors during upload
+        logger.exception(e)  # Catch and print any errors during upload
         exception_happened = True
 # Individual Collection Functions
 
@@ -681,10 +720,10 @@ def create_individuals_collection():
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
         exception_happened = True
 
 def fill_individuals_copied_named_vectors():
@@ -732,7 +771,7 @@ def individual_collection_creation():
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            logger.info(i, "/", len(endpoint_query_results))
+            logger.info("%d / %d", i, len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
         
@@ -808,10 +847,10 @@ def individual_collection_creation():
 
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
         exception_happened = True
 
 
@@ -927,10 +966,10 @@ def create_data_property_collection():
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")  # Indicate which batch is being uploaded
+            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
             collection.data.insert_many(batch)  # Insert the batch into the collection
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
         exception_happened = True
 
 def fill_data_property_copied_named_vectors():
@@ -972,7 +1011,7 @@ def data_property_collection_creation():
         
         # Log progress every 10%
         if i % int(tp) == 0:
-            logger.info(i, "/", len(endpoint_query_results))
+            logger.info("%d / %d", i, len(endpoint_query_results))
             
         formatted_object = {}  # Dictionary to hold formatted object properties
 
@@ -1054,7 +1093,7 @@ def data_property_collection_creation():
             collection.data.insert_many(batch)  # Insert the batch into the collection
 
     except Exception as e:
-        logging.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
         exception_happened = True
 
 
@@ -1155,10 +1194,10 @@ def create_rdftype_collection():
     batches = split_list(objects_to_upload, 4)
     try:
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i + 1}")
+            logger.info("Uploading batch %d", i + 1)
             collection.data.insert_many(batch)
     except Exception as e:
-        logging.error(e, traceback.format_exc())
+        logger.error(e, traceback.format_exc())
         exception_happened = True
 
 def fill_rdftype_copied_named_vectors():
@@ -1194,7 +1233,7 @@ def rdftype_collection_creation():
         tp = max(len(endpoint_query_results) / 10, 1)
         
         if i % int(tp) == 0:
-            logger.info(i, "/", len(endpoint_query_results))
+            logger.info("%d / %d", i, len(endpoint_query_results))
             
         formatted_object = {}
         
@@ -1283,7 +1322,7 @@ def rdftype_collection_creation():
             collection.data.insert_many(batch)
 
     except Exception as e:
-        logging.error(e, traceback.format_exc())
+        logger.error(e, traceback.format_exc())
         exception_happened = True
 
 
@@ -1326,7 +1365,7 @@ def ontology_collection_creation():
         tp = max(len(endpoint_query_results) / 10, 1)
         if int(tp) > 1:
             if i % int(tp) == 0:
-                logger.info(i, "/", len(endpoint_query_results))
+                logger.info("%d / %d", i, len(endpoint_query_results))
 
         formatted_object = {}
 
@@ -1395,7 +1434,7 @@ def ontology_collection_creation():
             collection.data.insert_many(batch)
 
     except Exception as e:
-        logging.error(e, traceback.format_exc())
+        logger.error(e, traceback.format_exc())
         exception_happened = True
    
    
@@ -1434,7 +1473,7 @@ if __name__ == "__main__":
             # fill_ontology_copied_named_vectors()
 
         except Exception as e:
-            logging.error(e, traceback.format_exc())
+            logger.error(e, traceback.format_exc())
             exception_happened = True
 
         finally:
