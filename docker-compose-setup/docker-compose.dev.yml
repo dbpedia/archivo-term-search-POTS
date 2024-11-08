@@ -19,7 +19,8 @@ services:
 
   weaviate-gui:
     profiles: [serve-api]
-    image: naaive/weaviate-ui:latest
+    # image: naaive/weaviate-ui:latest
+    image: jjauthor/weaviate-ui
     ports: 
       - "${WEAVIATE_GUI_EXPOSED_PORT:-127.0.0.1:7777}:7777" # only expose for debugging purposes !!!
     environment:
