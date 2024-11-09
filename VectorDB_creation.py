@@ -1441,7 +1441,19 @@ def ontology_collection_creation():
         logger.error(e, traceback.format_exc())
         exception_happened = True
    
-   
+
+def get_properties_from_collection(client, collection_name):
+    collection = client.collections.get(collection_name)
+    
+    all_properties = set()
+    for item in collection.iterator():
+        
+        for k in item.properties:
+            all_properties.add(k[0].upper()+k[1:])
+    
+    return all_properties
+
+
 
 # OBJECT PROPERTIES: {DOMAIN: CLASSES, RANGE: CLASSES}
 # INDIVIDUALS: {DOMAIN: CLASSES?, RANGE: CLASSES?}
