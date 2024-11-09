@@ -28,11 +28,12 @@ create_new = os.getenv("DELETE_OLD_INDEX")
 headers = {
     "X-HuggingFace-Api-Key": hf_key,
 }
- 
+i = 0
 with get_weaviate_client() as client:
     for collection_name in client.collections.list_all(simple=True):
         collection = client.collections.get(name=collection_name)
         print(f"Objects in collection '{collection.name}':")
-        for obj in collection.iterator():
+        for obj in collection.iterator(include_vector=True):
             print(obj.properties)
+
         print("---")

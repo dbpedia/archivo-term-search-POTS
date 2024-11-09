@@ -120,7 +120,6 @@ with get_weaviate_client() as client:
         return combined_filter
 
     def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, desired_language, limit):
-
         signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
         reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
 
@@ -139,40 +138,35 @@ with get_weaviate_client() as client:
                     original_vector, copy_vector_info = vector_name.split("___CP_SEPARATOR___")
                     property_to_find, target_collection, index = copy_vector_info.split("___")
                     vectorizer, prop, language = original_vector.split("___")
-                    # print(vectorizer, model_name, vectorizer == model_name)
-                    # print(language, desired_language, language == desired_language)
-                    # print(property_to_find, reference_properties_to_consider, property_to_find in reference_properties_to_consider)
-                    #print(property_to_find, reference_properties_to_consider, property_to_find in reference_properties_to_consider)
+
                     if vectorizer == model_name and language == desired_language and property_to_find in reference_properties_to_consider:
                         if signature_properties_to_consider:
                             if prop in signature_properties_to_consider:
 
                                 named_vectors_to_search[vector_name] = reference_property_embeddings[property_to_find]
                         else:
+
                             named_vectors_to_search[vector_name] = reference_property_embeddings[property_to_find]
             else:
 
                 vectorizer, prop, language = vector_name.split("___")
-                # print(vectorizer, model_name, vectorizer == model_name)
-                # print(language, desired_language, language == desired_language)
-                # print(prop, signature_properties_to_consider, prop in signature_properties_to_consider)
+
                 if vectorizer == model_name and language == desired_language and prop in signature_properties_to_consider:
-                    #print("Embedding", prop, "and adding", vector_name, "to list")
+
                     named_vectors_to_search[vector_name] = signature_property_embeddings[prop]
 
 
-
         target_vectors = list(named_vectors_to_search.keys())
-        #print("Searching in", target_vectors)
+
+        
         if signature_properties_to_consider and reference_properties_to_consider:
             target_vectors = TargetVectors.relative_score({x: (0.5 if "___CP_SEPARATOR___" not in x else 0.33 ) for x in target_vectors})
+        else:
+            target_vectors = TargetVectors.relative_score({x: 1/len(target_vectors) for x in target_vectors})
 
-        #print("Target vectors:", target_vectors)
-        #print(named_vectors_to_search)
-        #print("Near vector input:", named_vectors_to_search)
-        #print("Target vectors:", target_vectors)
 
         if not hybrid_property:
+
             results = collection.query.near_vector(
                     near_vector=named_vectors_to_search,
                     target_vector=target_vectors,
@@ -213,7 +207,7 @@ with get_weaviate_client() as client:
         return results
 
     def fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_property, language, limit):
-
+        print("Doing fuzzy search")
         target_collection = None
         built_filters = None
 
@@ -250,15 +244,22 @@ with get_weaviate_client() as client:
         fuzzy_filters = data.get("fuzzy_filters")
         fuzzy_filters_config = data.get("fuzzy_filters_config")
         exact_filters = data.get("exact_filters")
-        language = data.get("language", DEFAULT_LANGUAGE)
         limit = data.get("limit", DEFAULT_LIMIT)
+        if fuzzy_filters_config:
+            language = fuzzy_filters_config.get("language")
+            if not "language" in fuzzy_filters_config:
+                language = fuzzy_filters_config.get("lang", DEFAULT_LANGUAGE)
+            
+        else:
+            language = DEFAULT_LANGUAGE
+            limit = DEFAULT_LIMIT
 
         # PURE FUZZY SEARCH
         if fuzzy_filters:
 
             hybrid_search_field = fuzzy_filters_config.get("hybrid_search_field")
 
-                # PURE FUZZY SEARCH
+
             results = fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_search_field, language, limit)
 
 
@@ -271,20 +272,23 @@ with get_weaviate_client() as client:
 
     @app.route('/search', methods=['POST'])
     def search_endpoint():
+
         try:
             data = request.json
 
             # Validate filters
             is_valid, error_message = validate_filters(data)
             if not is_valid:
-                return jsonify({"error": error_message}), 400
 
+                return jsonify({"error": error_message}), 400
+            
             # Proceed with search operation
             results, status_code = search(data)
+
             return jsonify(results), status_code
         except Exception as e:
             logging.error(e, traceback.format_exc())
             return jsonify("Internal server error"), 400
-
+    
     if __name__ == '__main__':
-        app.run(host='0.0.0.0', port=9090)
+        app.run(host='127.0.0.1', port=8014, debug=True)

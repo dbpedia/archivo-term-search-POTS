@@ -72,6 +72,7 @@ class Ontology:
 
 def get_data_properties(url_endpoint):
     query = """
+        PREFIX schema: <http://schema.org/>
         PREFIX owl: <http://www.w3.org/2002/07/owl#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -84,7 +85,7 @@ def get_data_properties(url_endpoint):
         PREFIX terms: <http://purl.org/dc/terms/>
 
         SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
+            ?label
             (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
             (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
             ?description ?ontology
@@ -95,8 +96,15 @@ def get_data_properties(url_endpoint):
             BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
             OPTIONAL { ?term rdfs:domain ?domain . }
             OPTIONAL { ?term rdfs:range ?range . }
-            OPTIONAL { ?term rdfs:label ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
+            OPTIONAL { ?term rdfs:label ?rdfs_label . }
+            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
+            OPTIONAL { ?term skos:altLabel ?altLabel . }
+            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
+            OPTIONAL { ?term schema:name ?schemaName . }
+
+
+            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
+
             OPTIONAL { ?term dc:title ?label . }
             OPTIONAL { ?term dcterms:title ?label . }
             OPTIONAL { ?term terms:description ?description . }
@@ -141,6 +149,7 @@ def get_data_properties(url_endpoint):
 
 def get_object_properties(url_endpoint):
     query = """
+        PREFIX schema: <http://schema.org/>
         PREFIX owl: <http://www.w3.org/2002/07/owl#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -153,21 +162,26 @@ def get_object_properties(url_endpoint):
         PREFIX terms: <http://purl.org/dc/terms/>
 
         SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
+            ?label
             (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
             (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
             ?description ?ontology
         WHERE {
             ?term a owl:ObjectProperty .
-            FILTER(!isBlank(?term))  # Exclude blank nodes
+            FILTER(isIri(?term))  # Exclude blank nodes
             
             BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
             OPTIONAL { ?term rdfs:domain ?domain . }
             OPTIONAL { ?term rdfs:range ?range . }
-            OPTIONAL { ?term rdfs:label ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
+            OPTIONAL { ?term rdfs:label ?rdfs_label . }
+            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
+            OPTIONAL { ?term skos:altLabel ?altLabel . }
+            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
+            OPTIONAL { ?term schema:name ?schemaName . }
+
+
+            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
+
             OPTIONAL { ?term terms:description ?description . }
             OPTIONAL { ?term rdfs:comment ?description . }
         }
@@ -179,6 +193,7 @@ def get_object_properties(url_endpoint):
     
     sparql.setReturnFormat(JSON)
     results = sparql.query().convert()["results"]["bindings"]
+  
     all_data = []
     for r in results:
         doc = ObjectProperty()
@@ -295,6 +310,7 @@ GROUP BY ?term ?label ?description ?ontology
 
 def get_individuals(url_endpoint):
     query = """
+        PREFIX schema: <http://schema.org/>
         PREFIX owl: <http://www.w3.org/2002/07/owl#>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -307,11 +323,10 @@ def get_individuals(url_endpoint):
         PREFIX terms: <http://purl.org/dc/terms/>
 
         SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
+            ?label
             ?class 
             (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
             (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            (GROUP_CONCAT(DISTINCT ?domainlabel; SEPARATOR=", ") AS ?domainlabels)
             ?description ?ontology 
         WHERE {
             ?term rdf:type ?class .
@@ -323,16 +338,18 @@ def get_individuals(url_endpoint):
 
             BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
 
-            OPTIONAL { ?term rdfs:label ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
+            OPTIONAL { ?term rdfs:label ?rdfs_label . }
+            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
+            OPTIONAL { ?term skos:altLabel ?altLabel . }
+            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
+            OPTIONAL { ?term schema:name ?schemaName . }
+
+
+            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
 
             OPTIONAL { ?term terms:description ?description . }
             OPTIONAL { ?term rdfs:comment ?description . }
 
-            OPTIONAL { ?domain rdfs:label ?domainlabel . }
-            OPTIONAL { ?domain skos:prefLabel ?domainlabel . }
         }
         GROUP BY ?term ?label ?class ?description ?ontology
 
@@ -354,8 +371,8 @@ def get_individuals(url_endpoint):
             doc.label = r["label"]["value"]
 
 
-        if "domainlabels" in r.keys():
-            doc.domainlabels = r["domainlabels"]["value"].split(", ")
+        if "domains" in r.keys():
+            doc.domain = r["domains"]["value"].split(", ")
         if "ranges" in r.keys():
             doc.range = r["ranges"]["value"].split(", ")
         if "description" in r.keys():
@@ -376,7 +393,9 @@ def get_individuals(url_endpoint):
 
 def get_rdf_datatypes(url_endpoint):
 
-    query = """PREFIX owl: <http://www.w3.org/2002/07/owl#>
+    query = """
+            PREFIX schema: <http://schema.org/>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             PREFIX foaf: <http://xmlns.com/foaf/0.1/>
@@ -388,7 +407,7 @@ def get_rdf_datatypes(url_endpoint):
             PREFIX terms: <http://purl.org/dc/terms/>
 
             SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
+            ?label
             (GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
             ?description ?ontology
             WHERE {
@@ -404,14 +423,14 @@ def get_rdf_datatypes(url_endpoint):
             # Filtering out unwanted namespaces
 
             # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
+            OPTIONAL { ?term rdfs:label ?rdfs_label . }
+            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
+            OPTIONAL { ?term skos:altLabel ?altLabel . }
+            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
+            OPTIONAL { ?term schema:name ?schemaName . }
+
+
+            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
 
             # Attempting to retrieve description
             OPTIONAL { ?term terms:description ?description . }
@@ -433,8 +452,8 @@ def get_rdf_datatypes(url_endpoint):
                 doc.language = r["label"]["xml:lang"]
             doc.label = r["label"]["value"]
 
-        if "superclasses" in r.keys():
-            doc.superclass = r["superclasses"]["value"].split(", ")
+        if "superclass" in r.keys():
+            doc.superclass = r["superclass"]["value"].split(", ")
         if "description" in r.keys():
             if "xml:lang" in r["description"].keys():
                 doc.language = r["description"]["xml:lang"]

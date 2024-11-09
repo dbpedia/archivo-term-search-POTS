@@ -50,7 +50,7 @@ url_endpoint =  os.getenv("SPARQL_ENDPOINT")
 # weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
-empty_property_embedding_strategy = os.getenv("EMPTY_PROPERTY_EMBEDDING_STRATEGY")
+empty_property_embedding_strategy = os.getenv("EMPTY_ARRAY_PROPERTY_SLOT_FILLING_STRATEGY")
 
 global exception_happened
 exception_happened = False
@@ -181,9 +181,9 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
                                 # Compute the average of the previous vectors
                                 embeddings[formatted_object.uuid][vector] = np.mean(previous_vectors, axis=0)
                             else:
-                                
+        
                                 logger.error("No previous vectors found for %s, this should not happen", vector)
-                                print(vector)
+
                                 raise Exception
 
                         
@@ -225,7 +225,10 @@ def fetch_all_objects(collection):
 
 def fetch_all_named_vectors(collection):
     # Fetch all named vectors from the specified collection
-    return list(client.collections.get(collection).config.get().vector_config.keys())
+    res = list(client.collections.get(collection).config.get().vector_config.keys())
+    if collection == "RDFtypes":
+        return [r for r in res if not "Domain" in r and not "Range" in r and not "Subclass" in r]
+    return res
 
 # Object Property Collection Functions
 def get_object_property_collection_mappings():
@@ -272,6 +275,7 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
                 # Only embed if the language matches
                 if case_lang == result_doc.language:
                     embeddings[vector.name] = methodologies[field_name](result_doc, models[model])
+          
 
         # Generate a UUID for the object
         uuid = generate_uuid5(result_doc.termIRI)
@@ -302,7 +306,7 @@ def create_object_property_collection():
 
     # Remove duplicates by converting the list to a set
     all_named_vectors = set(all_named_vectors)  
-    #print([x.name for x in all_named_vectors])
+
     
     # Format objects for upload
     formatted_objects_for_upload = format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
@@ -715,7 +719,7 @@ def create_individuals_collection():
     # Upload the formatted object data
     logger.info("Uploading data")  # Indicate the start of data upload
     objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
-
+ 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
@@ -1137,7 +1141,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
 
         uuid = generate_uuid5(result_doc.termIRI)
         formatted_objects.append([formatted_object, embeddings, uuid])
-    
+
     return formatted_objects
 
 def create_rdftype_collection():
@@ -1159,9 +1163,9 @@ def create_rdftype_collection():
         all_named_vectors.extend(create_named_vectors(item))  # Use extend to add all vectors to the list
 
     all_named_vectors = set(all_named_vectors)  # Convert the list to a set to remove duplicates
-
+    
     formatted_objects_for_upload = format_rdftype_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
-
+    
     # Configure vectorizer
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
@@ -1186,25 +1190,25 @@ def create_rdftype_collection():
             ],
         )
 
+    if formatted_objects_for_upload:
+        # Upload the formatted object data
+        logger.info("Uploading data")
+        objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
 
-    # Upload the formatted object data
-    logger.info("Uploading data")
-    objects_to_upload = [wvc.data.DataObject(properties=d[0], vector=d[1], uuid=d[2]) for d in formatted_objects_for_upload]
-
-    batches = split_list(objects_to_upload, 4)
-    try:
-        for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-    except Exception as e:
-        logger.error(e, traceback.format_exc())
-        exception_happened = True
+        batches = split_list(objects_to_upload, 4)
+        try:
+            for i, batch in enumerate(batches):
+                logger.info("Uploading batch %d", i + 1)
+                collection.data.insert_many(batch)
+        except Exception as e:
+            logger.error("%s %s", e, traceback.format_exc())
+            exception_happened = True
 
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
 
     all_named_vectors = fetch_all_named_vectors(collection="RDFtypes")
-    
+    logger.info("GOT FROM %s", all_named_vectors)
     uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
     
     fill_copied_named_vectors(uuid_to_nv_mappings, "RDFtypes")
@@ -1321,7 +1325,7 @@ def rdftype_collection_creation():
             #collection.data.insert_many(objects_to_upload)
             collection.data.insert_many(batch)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(e, traceback.format_exc())
         exception_happened = True
 
@@ -1447,9 +1451,6 @@ def ontology_collection_creation():
 # RDF_TYPES: {}
 
 
-# Create a client instance
-
-
 
 if __name__ == "__main__":
     with get_weaviate_client() as client:
@@ -1461,11 +1462,11 @@ if __name__ == "__main__":
             create_class_collection()
             create_rdftype_collection()
             create_individuals_collection()
-            # create_ontology_collection()
+            # # create_ontology_collection()
             
-            logger.info("END OF COLLECTION CREATION")
-            for x in client.collections.list_all(simple=True):
-                print(client.collections.get(name=x), "exists")
+            # logger.info("END OF COLLECTION CREATION")
+            # for x in client.collections.list_all(simple=True):
+            #     print(client.collections.get(name=x), "exists")
             
             fill_object_property_copied_named_vectors()
             fill_data_property_copied_named_vectors()
