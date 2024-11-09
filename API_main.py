@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 from weaviate_client import get_weaviate_client
 import logging
-
+from VectorDB_creation import get_properties_from_collection
 app = Flask(__name__)
 
 # Enable CORS for all routes
@@ -76,11 +76,6 @@ with get_weaviate_client() as client:
             else:
                 return False, "'fuzzy_filters_config' must be passed when passing 'fuzzy_filters'."
 
-            valid_fuzzy_keys = ["label", "description", "superclass", "sublcass", "domain", "range"] # TODO: This should be collection-sensitive
-            for key in fuzzy_filters:
-                if key not in valid_fuzzy_keys:
-                    return False, f"Invalid key in 'fuzzy_filters': '{key}'. Valid keys: {valid_fuzzy_keys}"
-
         # Validate exact filters
         if exact_filters:
             if not isinstance(exact_filters, dict):
@@ -97,8 +92,13 @@ with get_weaviate_client() as client:
                 for key in exact_filters:
                     if key not in valid_exact_keys and key != "termtype":
                         return False, f"Invalid key in 'exact_filters': '{key}'. Valid keys: {valid_exact_keys}"
+                    
+                if fuzzy_filters:
+                    valid_fuzzy_keys = [x.name for x in client.collections.get(name=translation).config.get().properties] # TODO: This should be collection-sensitive
+                    for key in fuzzy_filters:
+                        if key not in valid_fuzzy_keys:
+                            return False, f"Invalid key in 'fuzzy_filters': '{key}'. Valid keys: {valid_fuzzy_keys}"
 
-            # TODO: check which keys are passed and see if they make sense
 
 
         return True, ""
@@ -123,10 +123,21 @@ with get_weaviate_client() as client:
         signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
         reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
 
+        translation = collections_translation[target_collection]
+        collection_properties = [x.name[0].upper()+x.name[1:] for x in client.collections.get(name=translation).config.get().properties] 
+        print(collection_properties)
+        for signature_property in signature_properties_to_consider:
+            if not signature_property in collection_properties:
+                raise Exception(f"{translation} collection not searched -> Property '{signature_property}' not found in collection '{translation}'")
+            
+        for reference_property in reference_properties_to_consider:
+            if not reference_property in collection_properties:
+                raise Exception(f"{translation} collection not searched -> Property '{reference_property}' not found in collection '{translation}'")
+        
         hybrid_property_str = hybrid_property
 
         # Get the collection object from the client (Assuming `client` is properly initialized)
-        collection = client.collections.get(name=collections_translation[target_collection])
+        collection = client.collections.get(name=translation)
         named_vectors = collection.config.get().vector_config.keys()
 
         #print(named_vectors)
@@ -237,7 +248,7 @@ with get_weaviate_client() as client:
                     results[collections_translation[collection_name]] = query_collection(model_name, collection_name, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, language, limit)
                 except Exception as e:
                     logging.error("Failed to fetch data from %s: %s\n%s", collection_name, e, traceback.format_exc())
-                    results[collections_translation[collection_name]] = "Error: Failed to fetch data from the collection"
+                    results[collections_translation[collection_name]] = "".join(str(e))
         return results
 
     def search(data):

@@ -10,6 +10,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import List
 from weaviate_client import get_weaviate_client
+from VectorDB_creation import get_properties_from_collection
 load_dotenv()
 
 # Global variables
@@ -28,12 +29,16 @@ create_new = os.getenv("DELETE_OLD_INDEX")
 headers = {
     "X-HuggingFace-Api-Key": hf_key,
 }
-i = 0
-with get_weaviate_client() as client:
-    for collection_name in client.collections.list_all(simple=True):
-        collection = client.collections.get(name=collection_name)
-        print(f"Objects in collection '{collection.name}':")
-        for obj in collection.iterator(include_vector=True):
-            print(obj.properties)
 
-        print("---")
+
+
+with get_weaviate_client() as client:
+    
+    print(get_properties_from_collection(client, "Classes"))
+    # for collection_name in client.collections.list_all(simple=True):
+    #     collection = client.collections.get(name=collection_name)
+    #     print(f"Objects in collection '{collection.name}':")
+    #     for obj in collection.iterator(include_vector=True):
+    #         print(obj.properties)
+
+    #     print("---")
