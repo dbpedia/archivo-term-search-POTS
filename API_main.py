@@ -91,13 +91,13 @@ with get_weaviate_client() as client:
 
                 for key in exact_filters:
                     if key not in valid_exact_keys and key != "termtype":
-                        return False, f"Invalid key in 'exact_filters': '{key}'. Valid keys: {valid_exact_keys}"
+                        return False, f"Invalid key in 'exact_filters': '{key}'. Valid keys for selected term type '{datatype_value}' are: {valid_exact_keys}"
                     
                 if fuzzy_filters:
                     valid_fuzzy_keys = [x.name for x in client.collections.get(name=translation).config.get().properties] # TODO: This should be collection-sensitive
                     for key in fuzzy_filters:
                         if key not in valid_fuzzy_keys:
-                            return False, f"Invalid key in 'fuzzy_filters': '{key}'. Valid keys: {valid_fuzzy_keys}"
+                            return False, f"Invalid key in 'fuzzy_filters': '{key}'. Valid keys for selected term type '{datatype_value}' are: {valid_fuzzy_keys}"
 
 
 
