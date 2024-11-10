@@ -31,7 +31,7 @@ services:
     restart: on-failure:3
 
   api-calls:
-    profiles: [serve-api]
+    profiles: [test-api]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
@@ -48,7 +48,7 @@ services:
       /bin/bash -c "source activate onto_search_env && sleep 10 && python API_calls.py"
 
   manual-checks-dummy:
-    profiles: [indexing, serve-api]
+    profiles: [debug]
     build:
       context: ../
       dockerfile: docker-compose-setup/Dockerfile
