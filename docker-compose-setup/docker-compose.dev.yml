@@ -30,6 +30,23 @@ services:
       - weaviate
     restart: on-failure:3
 
+  api-calls:
+    profiles: [serve-api]
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: copy_local
+    environment:
+      SEARCH_API_BASE_URI: 127.0.0.1:8014
+    network_mode: "service:api"
+    depends_on: 
+      - api
+    volumes:
+      - ../:/onto-search
+    command: >
+      /bin/bash -c "source activate onto_search_env && sleep 10 && python API_calls.py"
+
   manual-checks-dummy:
     profiles: [indexing, serve-api]
     build:

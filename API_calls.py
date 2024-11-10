@@ -1,20 +1,19 @@
-import requests
 import json
+import csv
+import os
+from dotenv import load_dotenv
+import requests
+import tabulate
 
 # Define the API endpoint
-api_endpoint = "http://127.0.0.1:8014/search"
+load_dotenv()
+api_hostname = os.getenv("SEARCH_API_BASE_URI","127.0.0.1:8014")
+
+api_endpoint = f"http://{api_hostname}/search"
 #"http://127.0.0.1:9090/search"
 
 # Define the model name
 model_name = "LaBSE"
-import json
-# Function to perform API requests and print results
-import requests
-import json
-import csv
-import requests
-import json
-import tabulate
 def perform_search_case(case_data, case_info, output_filename="search_results.txt"):
     print()
     print("--------------------------- QUERY ---------------------------")

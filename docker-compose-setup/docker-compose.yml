@@ -30,7 +30,7 @@ services:
     depends_on:
       - weaviate
     ports:
-      - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:9090"
+      - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:8014"
     env_file: compose-config.env
     environment:
       WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
