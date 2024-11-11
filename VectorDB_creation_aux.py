@@ -2,10 +2,21 @@ import os
 import requests
 import json
 from SPARQLWrapper import SPARQLWrapper, JSON
+from dataclasses import dataclass, field
+from typing import List
+
+def generate_empty_embedding(model):
+    return model.embed_query("")
+
+def split_list(lst, n):
+    k, m = divmod(len(lst), n)
+    return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]
+
+#######################################
+# SPARQL RESULT FUNCTIONS AND CLASSES #
+#######################################
 
 # Gets data from the sparql endpoint
-# Results come in the format [Term, Label, Description, Domain, Range, Language]
-# Results are "None", when applicable, except Label, where it will try to create one
 def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
     func_dict = {
         "DataProperties": get_data_properties,
@@ -15,11 +26,11 @@ def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
         "RDFtypes": get_rdf_datatypes,
         "Ontologies": get_ontologies
     }
+    # Results come in the format [Term, Label, Description, Domain, Range, Language]
+    # Results are "None", when applicable, except Label, where it will try to create one
     return func_dict[type](url_endpoint)
-from dataclasses import dataclass, field
-from typing import List
 
-# Base class
+# Base SPARQL result class
 @dataclass
 class ResultDocument:
     termIRI: str = "None"
@@ -69,6 +80,10 @@ class Ontology:
     classes: List[str] = field(default_factory=list)
     dataproperties: List[str] = field(default_factory=list)
     language: str = "None"
+
+########################
+# COLLECTION FUNCTIONS #
+########################
 
 def get_data_properties(url_endpoint):
     query = """
@@ -663,35 +678,36 @@ def get_ontologies(url_endpoint):
             all_ontology_data.append(ontology_data)
     
     return all_ontology_data
-# Embeds using the IRI + label
+
+# Embeds using the label
 def embed_using_label(data, model):
 
     formatted_str = f"{data.label}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
     
-# Embeds using the IRI + description
+# Embeds using the description
 def embed_using_desc(data, model):
 
     formatted_str = f"{data.description}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + domain + range
+# Embeds using the domain + range
 def embed_using_domain_plus_range(data, model):
    
     formatted_str = f"{data.domain} + {data.range}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + domain
+# Embeds using the domain
 def embed_using_domain(data, model):
     
     formatted_str = f"{data.domain}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + range
+# Embeds using the range
 def embed_using_range(data, model):
     
     formatted_str = f"{data.range}"
@@ -712,13 +728,14 @@ def embed_using_superclass(data, model):
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + subclass + superclass
+# Embeds using the subclass + superclass
 def embed_using_subclass_plus_superclass(data, model):
     
     formatted_str = f"{data.subclass} + {data.superclass}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
+# TODO: FIX ONTOLOGY FUNCTIONS
 def embed_ontology_classes(data, model):
     
     formatted_str = f"{data.classes}"
@@ -730,11 +747,3 @@ def embed_ontology_dataproperties(data, model):
     formatted_str = f"{data.dataproperties}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
-
-
-def generate_empty_embedding(model):
-    return model.embed_query("")
-
-def split_list(lst, n):
-    k, m = divmod(len(lst), n)
-    return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]

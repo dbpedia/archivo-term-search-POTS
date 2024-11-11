@@ -46,17 +46,15 @@ wcd_api_key = os.getenv("WCD_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 url_endpoint =  os.getenv("SPARQL_ENDPOINT")
-# weaviate_port = int(os.getenv("WEAVIATE_PORT"))
-# weaviate_port_grpc = int(os.getenv("WEAVIATE_PORT_GRPC"))
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
 create_new = os.getenv("DELETE_OLD_INDEX")
 empty_property_embedding_strategy = os.getenv("EMPTY_ARRAY_PROPERTY_SLOT_FILLING_STRATEGY")
 
+# Flag to designate indexer success / failure on exit
 global exception_happened
 exception_happened = False
 
 # Available models
-# model_names = ["LaBSE","all-MiniLM-L6-v2","all-MiniLM-L12-v2","all-distilroberta-v1","paraphrase-multilingual-MiniLM-L12-v2","multi-qa-mpnet-base-cos-v1"]
 model_names = ["LaBSE"]
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
@@ -75,7 +73,6 @@ class VirtualNamedVectorEmbedding:
     # CopiedVectors
     copy_relationship: str = field(default_factory=str)
     copy_relationship_index: str = field(default_factory=str)
-    target_property: str = field(default_factory=str)
 
     def __post_init__(self):
         object.__setattr__(self, 'name', f"{self.vectorizer}___{self.field_name}___{self.language}")
@@ -100,7 +97,6 @@ def create_named_vectors(item):
         embed_strategy=embed_strategy,
         copy_relationship=copy_relationship,
         copy_relationship_index=copy_relationship_index,
-        target_property=""
     )
 
     # Initialize a list to hold the original and copied embeddings
@@ -113,7 +109,6 @@ def create_named_vectors(item):
             embed_strategy=original_embedding.embed_strategy,
             copy_relationship=original_embedding.copy_relationship,
             copy_relationship_index=original_embedding.copy_relationship_index,
-            target_property=""
         )
         # Name the copied embedding to reflect its relationship
         copy_embedding.name = f"{original_embedding.name}___CP_SEPARATOR___{copy_relationship}___{copy_relationship_index}___{n}"
@@ -205,7 +200,6 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
 def query_collection_for_NV_embedding(target_collection, target_uri, target_named_vector):
     # Fetch the specified collection
     collection = client.collections.get(name=target_collection)
-    #print("Looking for", target_uri)
 
     # Attempt to fetch the object by its UUID
     data_object = collection.query.fetch_object_by_id(
@@ -232,19 +226,19 @@ def fetch_all_named_vectors(collection):
 
 # Object Property Collection Functions
 def get_object_property_collection_mappings():
-    # Initialize models for different vectorization strategies
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
+
     methodologies = {
         "Label": embed_using_label,
         "Description": embed_using_desc,
         "Domain": embed_using_domain,
         "Range": embed_using_range
     }
-    return models, methodologies  # Return both models and methodologies
+    return methodologies  # Return both models and methodologies
 
 def format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     formatted_objects = []
     for i, result_doc in enumerate(endpoint_query_results):
+        
         # Format each result document into a structured object
         formatted_object = {
             "TermIRI": result_doc.termIRI,
@@ -289,7 +283,7 @@ def create_object_property_collection():
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="ObjectProperties")
 
     # Get the models and methodologies for embedding
-    models, methodologies = get_object_property_collection_mappings()
+    methodologies = get_object_property_collection_mappings()
 
     # Create combinations for different fields, languages, and models
     all_combos = []
@@ -313,9 +307,6 @@ def create_object_property_collection():
 
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
-
-    # Delete the existing collection if it exists
-    client.collections.delete("ObjectProperties")
 
     logger.info("Creating collection")
     # Create a new collection with the specified properties and vectorizer config
@@ -351,6 +342,7 @@ def create_object_property_collection():
         
 
 def fill_object_property_copied_named_vectors():
+    
     # Fetch all objects and named vectors to fill the copied named vectors
     all_objects = fetch_all_objects(collection="ObjectProperties")
     all_named_vectors = fetch_all_named_vectors(collection="ObjectProperties")
@@ -365,8 +357,7 @@ def fill_object_property_copied_named_vectors():
 # Class Collection Functions
 
 def get_class_collection_mappings():
-    # Create mappings for model names to their corresponding SentenceTransformerEmbeddings instances
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
+
     
     # Define methodologies for embedding based on different fields
     methodologies = {
@@ -375,7 +366,8 @@ def get_class_collection_mappings():
         "Subclass": embed_using_subclass, 
         "Superclass": embed_using_superclass
     }
-    return models, methodologies  # Return both models and methodologies
+    
+    return methodologies  # Return both models and methodologies
 
 def format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     logger.info("Formatting objects")  # Indicate the start of formatting objects
@@ -424,7 +416,7 @@ def create_class_collection():
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Classes")
 
     # Get the models and methodologies for embedding
-    models, methodologies = get_class_collection_mappings()
+    methodologies = get_class_collection_mappings()
 
     # Prepare combinations for various fields and relationships
     all_combos = []
@@ -446,9 +438,6 @@ def create_class_collection():
 
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
-
-    # Delete the existing collection if it exists
-    client.collections.delete("Classes")
 
     logger.info("Creating collection")  # Indicate that the collection is being created
     # Create a new collection with the specified properties and vectorizer config
@@ -493,14 +482,10 @@ def fill_class_copied_named_vectors():
     # Fill the copied named vectors in the collection
     fill_copied_named_vectors(uuid_to_nv_mappings, "Classes")
 
-# OLD (TODO: rewrite soon)
 def class_collection_creation_hf_integration():
     # Get ontology class data from endpoint
     logger.info("Loading data")  # Indicate the start of data loading
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="classes")
-
-    # Create mappings for model names to their corresponding SentenceTransformerEmbeddings instances
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
     # Define methodologies for embedding based on different fields
     methodologies = {
@@ -569,9 +554,6 @@ def class_collection_creation_hf_integration():
 
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.text2vec_huggingface(name=x.name, model=x.vectorizer, source_properties=x.field_name) for x in all_named_vectors] 
-    
-    # Delete the existing collection for testing purposes
-    client.collections.delete("Classes_hf")
 
     # Create a new collection with the vectorizer configs
     logger.info("Creating collection")
@@ -611,12 +593,11 @@ def class_collection_creation_hf_integration():
     except Exception as e:
         logger.exception(e)  # Catch and print any errors during upload
         exception_happened = True
+
 # Individual Collection Functions
 
 def get_individuals_collection_mappings():
-    # Create mappings for model names to their corresponding SentenceTransformerEmbeddings instances
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
-    
+
     # Define methodologies for embedding based on different fields
     methodologies = {
         "Label": embed_using_label,
@@ -624,7 +605,7 @@ def get_individuals_collection_mappings():
         "Domain": embed_using_domain,
         "Range": embed_using_range
     }
-    return models, methodologies  # Return both models and methodologies
+    return methodologies  # Return both models and methodologies
 
 def format_individuals_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     formatted_objects = []  # List to hold formatted individual objects
@@ -668,11 +649,12 @@ def format_individuals_query_results(endpoint_query_results, methodologies, mode
 
 def create_individuals_collection():
     logger.info("Creating Individuals collection")  # Indicate the start of collection creation
+    
     # Fetch data from the endpoint for Individuals
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Individuals")
 
     # Get the models and methodologies for embedding
-    models, methodologies = get_individuals_collection_mappings()
+    methodologies = get_individuals_collection_mappings()
 
     # Prepare combinations for various fields and relationships
     all_combos = []
@@ -695,10 +677,8 @@ def create_individuals_collection():
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
-    # Delete the existing collection if it exists
-    client.collections.delete("Individuals")
-
     logger.info("Creating collection")  # Indicate that the collection is being created
+    
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="Individuals",
@@ -815,9 +795,6 @@ def individual_collection_creation():
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
 
-    # Delete the existing collection if it exists
-    client.collections.delete("Individuals")
-
     # Create a new collection with the vectorizer configs
     logger.info("Creating collection")  # Indicate that the collection is being created
     collection = client.collections.create(
@@ -860,9 +837,7 @@ def individual_collection_creation():
 
 # Data Property Collection Functions
 def get_data_property_collection_mappings():
-    # Create mappings of model names to their corresponding SentenceTransformerEmbeddings instances
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
-    
+
     # Define methodologies for embedding based on different fields
     methodologies = {
         "Label": embed_using_label,
@@ -870,7 +845,7 @@ def get_data_property_collection_mappings():
         "Domain": embed_using_domain,
         "Range": embed_using_range
     }
-    return models, methodologies  # Return both models and methodologies
+    return methodologies  # Return both models and methodologies
 
 def format_data_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     formatted_objects = []  # List to hold formatted data property objects
@@ -918,7 +893,7 @@ def create_data_property_collection():
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="DataProperties")
 
     # Get the models and methodologies for embedding
-    models, methodologies = get_data_property_collection_mappings()
+    methodologies = get_data_property_collection_mappings()
 
     all_combos = []  # List to hold all combinations of fields, languages, and models
     for field_name in ["Label", "Description"]:
@@ -940,9 +915,6 @@ def create_data_property_collection():
 
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
-
-    # Delete the existing collection if it exists
-    client.collections.delete("DataProperties")
 
     logger.info("Creating collection")  # Indicate that the collection is being created
     # Create a new collection with the specified properties and vectorizer config
@@ -992,9 +964,6 @@ def data_property_collection_creation():
     # Get ontology property data from endpoint
     logger.info("Loading data")  # Indicate the start of data loading
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="data_properties")
-
-    # Mappings between model names (formatted_object to _ format) and model instances
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
     # Mappings between mapping methodology names and functions
     methodologies = {"Label": embed_using_label, "Description": embed_using_desc, "Domain": embed_using_domain, "Range": embed_using_range}
@@ -1056,9 +1025,6 @@ def data_property_collection_creation():
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
 
-    # Delete the existing collection if it exists
-    client.collections.delete("DataProperties")
-
     # Create a new collection with the vectorizer configurations
     logger.info("Creating collection")  # Indicate that the collection is being created
     collection = client.collections.create(
@@ -1103,16 +1069,18 @@ def data_property_collection_creation():
 
 # RDFtype Collection Functions
 def get_rdftype_collection_mappings():
-    models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
+
     methodologies = {
         "Label": embed_using_label,
         "Description": embed_using_desc,
         "Superclass": embed_using_superclass
     }
-    return models, methodologies
+    return methodologies
 
 def format_rdftype_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
+    
     logger.info("Formatting objects")
+    
     formatted_objects = []
     for i, result_doc in enumerate(endpoint_query_results):
         formatted_object = {
@@ -1128,7 +1096,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
                 formatted_object["Label"] = result_doc.termIRI.split("#")[1]
             elif "/" in result_doc.termIRI:
                 formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-        #print(result_doc.termIRI)
+
         embeddings = {}
         for vector in all_named_vectors:
             if "___CP_SEPARATOR___" not in vector.name:
@@ -1145,10 +1113,12 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
     return formatted_objects
 
 def create_rdftype_collection():
+    
     logger.info("Creating RDF_types collection")
+    
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
 
-    models, methodologies = get_rdftype_collection_mappings()
+    methodologies = get_rdftype_collection_mappings()
 
     all_combos = []
     for field_name in ["Label", "Description"]:
@@ -1169,8 +1139,6 @@ def create_rdftype_collection():
     # Configure vectorizer
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
-    client.collections.delete("RDFtypes")
-
     logger.info("Creating collection")
     collection = client.collections.create(
             
@@ -1182,7 +1150,7 @@ def create_rdftype_collection():
 
             properties = [
                 wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
-                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), # Some labels are inferred based on the IRI, TODO later
+                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), 
                 wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
                 wvc.config.Property(name="Superclass", data_type=wvc.config.DataType.TEXT_ARRAY),
                 wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
@@ -1218,7 +1186,6 @@ def rdftype_collection_creation():
     logger.info("Loading data")
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
 
-    ##print(ontologies)
     # Mappings between mapping methodology names and functions
     methodologies = {"Label": embed_using_label, "Description": embed_using_desc, "Superclass": embed_using_superclass}
 
@@ -1258,7 +1225,7 @@ def rdftype_collection_creation():
                 formatted_object["Label"] = result_doc.termIRI.split("#")[1]
             elif "/" in result_doc.termIRI:
                 formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-        #print(formatted_object)
+
         embeddings = {}
         for case in all_combos:
             name = case["case_name"]
@@ -1276,11 +1243,6 @@ def rdftype_collection_creation():
 
     # Configurations for custom vectorizers (one for every case)
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
-    
-    # TODO: modify above so some uri for "special models" 
-
-    # Delete the last iteration of the collection (for testing purposes)
-    client.collections.delete("RDFtypes")
 
     # Create a new collection with the vectorizer configs
     logger.info("Creating collection")
@@ -1293,7 +1255,7 @@ def rdftype_collection_creation():
             properties = [
                 wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
                 wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT), # 
-                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), # Some labels are inferred based on the IRI, TODO later
+                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), 
                 wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
                 wvc.config.Property(name="Superclass", data_type=wvc.config.DataType.TEXT_ARRAY),
                 wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
@@ -1382,7 +1344,6 @@ def ontology_collection_creation():
         formatted_object["Dataproperties"] = result_doc.dataproperties
         formatted_object["Language"] = result_doc.language
 
-        #print(formatted_object)
         embeddings = {}
         for case in all_combos:
             name = case["case_name"]
@@ -1400,9 +1361,6 @@ def ontology_collection_creation():
 
     # Configurations for custom vectorizers (one for every case)
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
-
-    # Delete the last iteration of the collection (for testing purposes)
-    client.collections.delete("Ontologies")
 
     # Create a new collection with the vectorizer configs
     logger.info("Creating collection")
@@ -1429,7 +1387,6 @@ def ontology_collection_creation():
             uuid=d[2]
         ))
 
-
     batches = split_list(objects_to_upload, 4)
 
     try:
@@ -1453,8 +1410,6 @@ def get_properties_from_collection(client, collection_name):
     
     return all_properties
 
-
-
 # OBJECT PROPERTIES: {DOMAIN: CLASSES, RANGE: CLASSES}
 # INDIVIDUALS: {DOMAIN: CLASSES?, RANGE: CLASSES?}
 # CLASSES: {SUBCLASS: CLASSES, SUPERCLASS: CLASSES}
@@ -1462,11 +1417,11 @@ def get_properties_from_collection(client, collection_name):
 # ONTOLOGIES: {}
 # RDF_TYPES: {}
 
-
-
 if __name__ == "__main__":
     with get_weaviate_client() as client:
-        client.collections.delete_all()
+        
+        if create_new:
+            client.collections.delete_all()
 
         try:
             create_object_property_collection()
