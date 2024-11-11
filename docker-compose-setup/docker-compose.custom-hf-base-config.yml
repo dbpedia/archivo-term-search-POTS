@@ -9,7 +9,7 @@ services:
     profiles: [downloading,indexing,serve-api]
     image: semitechnologies/transformers-inference:custom-1.9.6 # see https://github.com/weaviate/t2v-transformers-models/tree/d7d8312d5b58d3f7fd5220485961d8ca746c2d57 for download.py and Dockerfile
     environment:
-      MODEL_NAME: 'distilbert/distilroberta-base'  # hugginface transformers model name
+      MODEL_NAME: 'YOU NEED TO specify a huggingface model name'  # huggingface transformers model name is invalid since this template is not supposed to be used directly
       ENABLE_CUDA: '0'
       EXIT_AFTER_DOWNLOAD: '${EXIT_AFTER_DOWNLOAD:-0}' # if set to 1 the model will only be downloaded and not started
     entrypoint: ["/bin/sh", "-c", "/app/load-and-start-transformer.sh"] # overwrite the default entrypoint to download the model intially from web

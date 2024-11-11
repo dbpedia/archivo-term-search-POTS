@@ -1,0 +1,2 @@
+#! /usr/bin/env sh
+seq 1000 | xargs -P 100 -I {} curl -X POST -H "Content-Type: application/json" -d "{\"text\": \"The London Eye is a ferris wheel at the River Thames. Random number: $RANDOM\"}" http://127.0.0.1:8087/vectors/ >/dev/null 2>/dev/null
