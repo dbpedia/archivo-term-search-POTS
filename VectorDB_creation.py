@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import List
 from weaviate_client import get_weaviate_client
 import logging
+import csv
 
 load_dotenv()
 
@@ -333,12 +334,18 @@ def create_object_property_collection():
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
+        successes = 0
         for i, batch in enumerate(batches):
             logger.info("Uploading batch %d", i + 1)
             collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
+        
+        return {"error": True}
         
 
 def fill_object_property_copied_named_vectors():
@@ -464,13 +471,18 @@ def create_class_collection():
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())  # Catch and print any errors during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
-
+        
+        return {"error": True}
 def fill_class_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
     all_objects = fetch_all_objects(collection="Classes")
@@ -584,16 +596,19 @@ def class_collection_creation_hf_integration():
 
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
-
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
-
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.exception(e)  # Catch and print any errors during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
-
+        
+        return {"error": True}
 # Individual Collection Functions
 
 def get_individuals_collection_mappings():
@@ -703,13 +718,19 @@ def create_individuals_collection():
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
-
+            
+        return {"error": True}
+    
 def fill_individuals_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
     all_objects = fetch_all_objects(collection="Individuals")
@@ -827,12 +848,18 @@ def individual_collection_creation():
     batches = split_list(objects_to_upload, 4)
 
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
+        
+        return {"error": True}
 
 
 # Data Property Collection Functions
@@ -941,13 +968,18 @@ def create_data_property_collection():
     # Split objects into batches for uploading
     batches = split_list(objects_to_upload, 4)
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
-
+        
+        return {"error": True}
 def fill_data_property_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
     all_objects = fetch_all_objects(collection="DataProperties")
@@ -1058,13 +1090,18 @@ def data_property_collection_creation():
     batches = split_list(objects_to_upload, 4)
 
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i+1}")  # Indicate which batch is being uploaded
-            collection.data.insert_many(batch)  # Insert the batch into the collection
-
+            logger.info("Uploading batch %d", i + 1)
+            collection.data.insert_many(batch)
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())  # Catch and print any errors that occur during upload
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
+        
+        return {"error": True}
 
 
 # RDFtype Collection Functions
@@ -1165,13 +1202,19 @@ def create_rdftype_collection():
 
         batches = split_list(objects_to_upload, 4)
         try:
+            successes = 0
             for i, batch in enumerate(batches):
                 logger.info("Uploading batch %d", i + 1)
                 collection.data.insert_many(batch)
+                successes += len(batch)
+            
+            return {"uploaded": successes}
         except Exception as e:
-            logger.error("%s %s", e, traceback.format_exc())
+            logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
             exception_happened = True
-
+            
+            return {"error": True}
+    return {"uploaded": 0}
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
 
@@ -1281,15 +1324,18 @@ def rdftype_collection_creation():
     batches = split_list(objects_to_upload, 4)
 
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i+1}")
-            # Perform the insert operation
-            #collection.data.insert_many(objects_to_upload)
+            logger.info("Uploading batch %d", i + 1)
             collection.data.insert_many(batch)
-
-    except (ValueError, TypeError, KeyError) as e:
-        logger.error(e, traceback.format_exc())
+            successes += len(batch)
+        
+        return {"uploaded": successes}
+    except Exception as e:
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
+        
+        return {"error": True}
 
 
 
@@ -1390,14 +1436,18 @@ def ontology_collection_creation():
     batches = split_list(objects_to_upload, 4)
 
     try:
+        successes = 0
         for i, batch in enumerate(batches):
-            logger.info(f"Uploading batch {i+1}")
+            logger.info("Uploading batch %d", i + 1)
             collection.data.insert_many(batch)
-
+            successes += len(batch)
+        
+        return {"uploaded": successes}
     except Exception as e:
-        logger.error(e, traceback.format_exc())
+        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
-   
+        
+        return {"error": True}
 
 def get_properties_from_collection(client, collection_name):
     collection = client.collections.get(collection_name)
@@ -1416,31 +1466,61 @@ def get_properties_from_collection(client, collection_name):
 # RDF_TYPES: {SUPERCLASS: RDF_TYPES}
 # ONTOLOGIES: {}
 # RDF_TYPES: {}
+# Define the get_collection_status function
+def get_collection_status(collection_name, stats):
+    if "uploaded" in stats:
+        return [collection_name, "Successfully created", stats["uploaded"]]
+    elif "error" in stats and stats["error"]:
+        return [collection_name, "Error", "N/A"]
+    else:
+        return [collection_name, "Unknown", "N/A"]
 
+# Main program
 if __name__ == "__main__":
+    exception_happened = False
+    
     with get_weaviate_client() as client:
         
         if create_new:
             client.collections.delete_all()
 
         try:
-            create_object_property_collection()
-            create_data_property_collection()
-            create_class_collection()
-            create_rdftype_collection()
-            create_individuals_collection()
-            # # create_ontology_collection()
-            
-            # logger.info("END OF COLLECTION CREATION")
-            # for x in client.collections.list_all(simple=True):
-            #     print(client.collections.get(name=x), "exists")
-            
+            # Create stats for each collection
+            object_property_stats = create_object_property_collection()
+            data_property_stats = create_data_property_collection()
+            class_stats = create_class_collection()
+            rdftype_stats = create_rdftype_collection()
+            individuals_stats = create_individuals_collection()
+
+            # Fill in copied named vectors
             fill_object_property_copied_named_vectors()
             fill_data_property_copied_named_vectors()
             fill_class_copied_named_vectors()
             fill_rdftype_copied_named_vectors()
             fill_individuals_copied_named_vectors()
-            # fill_ontology_copied_named_vectors()
+
+            # Collect collection statuses
+            status_data = [
+                get_collection_status("Object Property", object_property_stats),
+                get_collection_status("Data Property", data_property_stats),
+                get_collection_status("Class", class_stats),
+                get_collection_status("RDFType", rdftype_stats),
+                get_collection_status("Individuals", individuals_stats)
+            ]
+
+
+            # Define the CSV file name
+            csv_file_name = "collection_creation_status.csv"
+
+            # Write the data to the CSV file
+            with open(csv_file_name, mode='w', newline='', encoding='utf-8') as file:
+                writer = csv.writer(file)
+                # Write the header
+                writer.writerow(["Collection Name", "Status", "Items Processed"])
+                # Write the collection statuses
+                writer.writerows(status_data)
+
+            print(f"Collection statuses saved to {csv_file_name}")
 
         except Exception as e:
             logger.error(e, traceback.format_exc())
