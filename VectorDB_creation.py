@@ -1219,7 +1219,7 @@ def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
 
     all_named_vectors = fetch_all_named_vectors(collection="RDFtypes")
-    logger.info("GOT FROM %s", all_named_vectors)
+
     uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
     
     fill_copied_named_vectors(uuid_to_nv_mappings, "RDFtypes")
@@ -1481,6 +1481,19 @@ if __name__ == "__main__":
     
     with get_weaviate_client() as client:
         
+        collections_at_beginning = [collection_name for collection_name in client.collections.list_all(simple=True)]
+
+        # Define the CSV file name
+        csv_file_name = "collection_creation_status.csv"
+        
+        with open(csv_file_name, mode='w', newline='', encoding='utf-8') as file:
+            
+            writer = csv.writer(file)
+            writer.writerow(["START OF COLLECTION CREATION SCRIPT"])
+            # Write the header
+            writer.writerow(["Exsiting collections"])
+            # Write the collection statuses
+            writer.writerow(collections_at_beginning)
         if create_new:
             client.collections.delete_all()
 
@@ -1508,14 +1521,12 @@ if __name__ == "__main__":
                 get_collection_status("Individuals", individuals_stats)
             ]
 
-
-            # Define the CSV file name
-            csv_file_name = "collection_creation_status.csv"
-
             # Write the data to the CSV file
-            with open(csv_file_name, mode='w', newline='', encoding='utf-8') as file:
+            with open(csv_file_name, mode='a', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 # Write the header
+                writer.writerow([])
+                writer.writerow(["END OF COLLECTION CREATION SCRIPT"])
                 writer.writerow(["Collection Name", "Status", "Items Processed"])
                 # Write the collection statuses
                 writer.writerows(status_data)
