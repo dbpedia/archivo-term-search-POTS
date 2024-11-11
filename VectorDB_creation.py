@@ -280,6 +280,7 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
 
 def create_object_property_collection():
     logger.info("Creating ObjectProperties collection")
+    logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for ObjectProperties
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="ObjectProperties")
 
@@ -302,7 +303,7 @@ def create_object_property_collection():
     # Remove duplicates by converting the list to a set
     all_named_vectors = set(all_named_vectors)  
 
-    
+    print("Formatting results for upload")
     # Format objects for upload
     formatted_objects_for_upload = format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
 
@@ -419,6 +420,7 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
 
 def create_class_collection():
     logger.info("Creating class collection")  # Indicate the start of collection creation
+    logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for Classes
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Classes")
 
@@ -439,7 +441,7 @@ def create_class_collection():
         all_named_vectors.extend(create_named_vectors(item))  # Use extend to add all vectors to the list
 
     all_named_vectors = set(all_named_vectors)  # Remove duplicates by converting the list to a set
-
+    print("Formatting results for upload")
     # Format objects for upload
     formatted_objects_for_upload = format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
 
@@ -664,7 +666,7 @@ def format_individuals_query_results(endpoint_query_results, methodologies, mode
 
 def create_individuals_collection():
     logger.info("Creating Individuals collection")  # Indicate the start of collection creation
-    
+    logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for Individuals
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Individuals")
 
@@ -685,7 +687,7 @@ def create_individuals_collection():
         all_named_vectors.extend(create_named_vectors(item))  # Use extend to add all vectors to the list
 
     all_named_vectors = set(all_named_vectors)  # Remove duplicates by converting the list to a set
-
+    print("Formatting results for upload")
     # Format objects for upload
     formatted_objects_for_upload = format_individuals_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
 
@@ -742,126 +744,6 @@ def fill_individuals_copied_named_vectors():
     # Fill the copied named vectors in the collection
     fill_copied_named_vectors(uuid_to_nv_mappings, "Individuals")
 
-def individual_collection_creation():
-    # Get ontology property data from endpoint
-    logger.info("Loading data")  # Indicate the start of data loading
-    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="individuals")
-
-    # Mappings between mapping methodology names and functions
-    methodologies = {
-        "Label": embed_using_label,
-        "Description": embed_using_desc,
-        "Domain": embed_using_domain,
-        "Range": embed_using_range
-    }
-
-    # All combinations between models, methodologies and languages
-    all_combos = []
-    for model in models:
-        for method in methodologies:
-            for lang in languages:
-                all_combos.append({
-                    "case_name": f"{model}___{method}___{lang}",
-                    "model": model,
-                    "method": method,
-                    "lang": lang
-                })
-
-    formatted_objects_for_upload = []  # List to hold formatted objects for upload
-
-    # Formatting of the ontology data to upload to the collection
-    logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
-    for i, result_doc in enumerate(endpoint_query_results):
-        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
-        
-        # Log progress every 10%
-        if i % int(tp) == 0:
-            logger.info("%d / %d", i, len(endpoint_query_results))
-            
-        formatted_object = {}  # Dictionary to hold formatted object properties
-        
-        # Generate a UUID for the object based on its TermIRI
-        uuid = generate_uuid5(result_doc.termIRI)
-        formatted_object["TermIRI"] = result_doc.termIRI
-        formatted_object["RDF_type"] = result_doc.rdfType
-        formatted_object["Ontology"] = result_doc.ontology
-        formatted_object["Label"] = result_doc.label
-        formatted_object["Description"] = result_doc.description
-        formatted_object["Domain"] = result_doc.domain
-        formatted_object["Range"] = result_doc.range
-        formatted_object["Language"] = result_doc.language
-        
-        # Infer the label from TermIRI if it's not provided
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-        
-        embeddings = {}  # Dictionary to hold embeddings for the individual
-        for case in all_combos:
-            name = case["case_name"]
-            model = case["model"]
-            method = case["method"]
-            case_lang = case["lang"]
-            # Generate embeddings only if the language matches
-            if case_lang == result_doc.language:
-                if not name in embeddings:
-                    embeddings[name] = []
-                
-                embeddings[name] = methodologies[method](result_doc, models[model])  # Generate embeddings
-            
-        formatted_objects_for_upload.append([formatted_object, embeddings, uuid])  # Append formatted data
-
-    # Configure vectorizer for the named vectors
-    vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
-
-    # Create a new collection with the vectorizer configs
-    logger.info("Creating collection")  # Indicate that the collection is being created
-    collection = client.collections.create(
-        name="Individuals",
-        description="Text2kg benchmark individuals",
-        vectorizer_config=vectorizer_config,
-        properties=[
-            wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Domain", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Range", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Ontology", data_type=wvc.config.DataType.TEXT),
-        ],
-    )
-
-    # Upload the formatted object data
-    logger.info("Uploading data")  # Indicate the start of data upload
-    objects_to_upload = []
-    for d in formatted_objects_for_upload:
-        objects_to_upload.append(wvc.data.DataObject(
-            properties=d[0],
-            vector=d[1],
-            uuid=d[2]
-        ))
-
-    # Split objects into batches for uploading
-    batches = split_list(objects_to_upload, 4)
-
-    try:
-        successes = 0
-        for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
-        
-        return {"uploaded": successes}
-    except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
-        exception_happened = True
-        
-        return {"error": True}
-
-
 # Data Property Collection Functions
 def get_data_property_collection_mappings():
 
@@ -916,6 +798,7 @@ def format_data_property_query_results(endpoint_query_results, methodologies, mo
 
 def create_data_property_collection():
     logger.info("Creating DataProperties collection")  # Indicate the start of collection creation
+    logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for DataProperties
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="DataProperties")
 
@@ -936,7 +819,7 @@ def create_data_property_collection():
         all_named_vectors.extend(create_named_vectors(item))  # Use extend to add all vectors to the list
 
     all_named_vectors = set(all_named_vectors)  # Remove duplicates by converting the list to a set
-
+    print("Formatting results for upload")
     # Format objects for upload
     formatted_objects_for_upload = format_data_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
 
@@ -992,118 +875,6 @@ def fill_data_property_copied_named_vectors():
     # Fill the copied named vectors in the collection
     fill_copied_named_vectors(uuid_to_nv_mappings, "DataProperties")
 
-def data_property_collection_creation():
-    # Get ontology property data from endpoint
-    logger.info("Loading data")  # Indicate the start of data loading
-    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="data_properties")
-
-    # Mappings between mapping methodology names and functions
-    methodologies = {"Label": embed_using_label, "Description": embed_using_desc, "Domain": embed_using_domain, "Range": embed_using_range}
-
-    # All combinations between models, methodologies, and languages
-    all_combos = []
-    for model in models:
-        for method in methodologies:
-            for lang in languages:
-                all_combos.append({"case_name": f"{model}___{method}___{lang}", "model": model, "method": method, "lang": lang})
-
-    formatted_objects_for_upload = []  # List to hold formatted data property objects for upload
-
-    # Formatting of the ontology data to upload to the collection
-    logger.info("Generating embeddings and formatting data")  # Indicate the start of data formatting
-    for i, result_doc in enumerate(endpoint_query_results):
-        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
-        
-        # Log progress every 10%
-        if i % int(tp) == 0:
-            logger.info("%d / %d", i, len(endpoint_query_results))
-            
-        formatted_object = {}  # Dictionary to hold formatted object properties
-
-        # Generate a UUID for the object based on its TermIRI
-        uuid = generate_uuid5(result_doc.termIRI)
-        
-        formatted_object["TermIRI"] = result_doc.termIRI
-        formatted_object["RDF_type"] = result_doc.rdfType
-        formatted_object["Ontology"] = result_doc.ontology
-        formatted_object["Label"] = result_doc.label
-        formatted_object["Description"] = result_doc.description
-        formatted_object["Domain"] = result_doc.domain
-        formatted_object["Range"] = result_doc.range
-        formatted_object["Language"] = result_doc.language
-        
-        # Infer the label from TermIRI if it's not provided
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-
-        embeddings = {}  # Dictionary to hold embeddings for the data property
-        for case in all_combos:
-            name = case["case_name"]
-            model = case["model"]
-            method = case["method"]
-            case_lang = case["lang"]
-            # Generate embeddings only if the language matches
-            if case_lang == result_doc.language:
-                if name not in embeddings:
-                    embeddings[name] = []  # Initialize the embeddings list if not already present
-                
-                embeddings[name] = methodologies[method](result_doc, models[model])  # Generate embeddings
-            
-        formatted_objects_for_upload.append([formatted_object, embeddings, uuid])  # Append formatted data
-
-    # Configure vectorizer for the named vectors
-    vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
-
-    # Create a new collection with the vectorizer configurations
-    logger.info("Creating collection")  # Indicate that the collection is being created
-    collection = client.collections.create(
-        name="DataProperties",
-        description="Text2kg benchmark data properties",
-        vectorizer_config=vectorizer_config,
-        properties=[
-            wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT), 
-            wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), 
-            wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Domain", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Range", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Ontology", data_type=wvc.config.DataType.TEXT),
-        ],
-    )
-
-    # Upload the formatted object data
-    logger.info("Uploading data")  # Indicate the start of data upload
-    objects_to_upload = []
-    for d in formatted_objects_for_upload:
-        objects_to_upload.append(wvc.data.DataObject(
-            properties=d[0],
-            vector=d[1], 
-            uuid=d[2]
-        ))
-    
-
-    # Split objects into batches for uploading
-    batches = split_list(objects_to_upload, 4)
-
-    try:
-        successes = 0
-        for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
-        
-        return {"uploaded": successes}
-    except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
-        exception_happened = True
-        
-        return {"error": True}
-
-
 # RDFtype Collection Functions
 def get_rdftype_collection_mappings():
 
@@ -1152,7 +923,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
 def create_rdftype_collection():
     
     logger.info("Creating RDF_types collection")
-    
+    logger.info("Fetching SPARQL endpoint query results")
     endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
 
     methodologies = get_rdftype_collection_mappings()
@@ -1170,7 +941,7 @@ def create_rdftype_collection():
         all_named_vectors.extend(create_named_vectors(item))  # Use extend to add all vectors to the list
 
     all_named_vectors = set(all_named_vectors)  # Convert the list to a set to remove duplicates
-    
+    print("Formatting results for upload")
     formatted_objects_for_upload = format_rdftype_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
     
     # Configure vectorizer
@@ -1215,6 +986,7 @@ def create_rdftype_collection():
             
             return {"error": True}
     return {"uploaded": 0}
+
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
 
@@ -1223,121 +995,6 @@ def fill_rdftype_copied_named_vectors():
     uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
     
     fill_copied_named_vectors(uuid_to_nv_mappings, "RDFtypes")
-
-def rdftype_collection_creation():
-    # Get ontology property data from endpoint
-    logger.info("Loading data")
-    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
-
-    # Mappings between mapping methodology names and functions
-    methodologies = {"Label": embed_using_label, "Description": embed_using_desc, "Superclass": embed_using_superclass}
-
-    # All combinations between models, methodologies and languages
-    all_combos = []
-    for model in models:
-        for method in methodologies:
-            for lang in languages:
-                all_combos.append({"case_name": f"{model}___{method}___{lang}","model": model, "method": method, "lang":lang})
-
-    formatted_objects_for_upload = []
-
-    # Formatting of the ontology data to upload to the collection
-    logger.info("Generating embeddings and formatting data")
-    for i, result_doc in enumerate(endpoint_query_results):
-        tp = max(len(endpoint_query_results) / 10, 1)
-        
-        if i % int(tp) == 0:
-            logger.info("%d / %d", i, len(endpoint_query_results))
-            
-        formatted_object = {}
-        
-        uuid = generate_uuid5(result_doc.termIRI)
-        
-        #{"termIRI": "http:termIRI1", "type": "http:class", 
-        
-        formatted_object["TermIRI"] = result_doc.termIRI
-        formatted_object["Type"] = result_doc.rdfType
-        formatted_object["Ontology"] = result_doc.ontology
-        formatted_object["Label"] = result_doc.label
-        formatted_object["Description"] = result_doc.description
-        formatted_object["Superclass"] = result_doc.superclass
-        formatted_object["Language"] = result_doc.language
-        
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-
-        embeddings = {}
-        for case in all_combos:
-            name = case["case_name"]
-            model = case["model"]
-            method = case["method"]
-            case_lang = case["lang"]
-            if case_lang == result_doc.language:
-                
-                if not name in embeddings:
-                    embeddings[name] = []
-                
-                embeddings[name] = methodologies[method](result_doc, models[model])
-                
-        formatted_objects_for_upload.append([formatted_object, embeddings, uuid])
-
-    # Configurations for custom vectorizers (one for every case)
-    vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
-
-    # Create a new collection with the vectorizer configs
-    logger.info("Creating collection")
-    collection = client.collections.create(
-            name="RDFtypes",
-            description="Text2kg benchmark RDF_types",
-            
-            vectorizer_config=vectorizer_config,
-
-            properties = [
-                wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
-                wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT), # 
-                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), 
-                wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
-                wvc.config.Property(name="Superclass", data_type=wvc.config.DataType.TEXT_ARRAY),
-                wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
-                wvc.config.Property(name="Ontology", data_type=wvc.config.DataType.TEXT),
-            ],
-        )
-
-    
-    # # Upload the formatted_object data
-    logger.info("Uploading data")
-    objects_to_upload = []
-    for d in formatted_objects_for_upload:
-        objects_to_upload.append(wvc.data.DataObject(
-        properties=d[0],
-        vector=d[1],
-        uuid=d[2]
-        ))
-        
-    # for f in formatted_objects_for_upload:
-    #     print(f[0]["Label"])
-
-
-    batches = split_list(objects_to_upload, 4)
-
-    try:
-        successes = 0
-        for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
-        
-        return {"uploaded": successes}
-    except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
-        exception_happened = True
-        
-        return {"error": True}
-
-
 
 # Ontology Collection Functions
 def get_ontology_collection_mappings():
@@ -1496,6 +1153,17 @@ if __name__ == "__main__":
             writer.writerow(collections_at_beginning)
         if create_new:
             client.collections.delete_all()
+            collections_after_delete = [collection_name for collection_name in client.collections.list_all(simple=True)]
+            
+            with open(csv_file_name, mode='a', newline='', encoding='utf-8') as file:
+                
+                writer = csv.writer(file)
+                writer.writerow([])
+                writer.writerow(["AFTER DELETION ISSUED"])
+                # Write the header
+                writer.writerow(["Exsiting collections"])
+                # Write the collection statuses
+                writer.writerow(collections_after_delete)
 
         try:
             # Create stats for each collection
