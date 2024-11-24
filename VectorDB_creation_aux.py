@@ -12,6 +12,10 @@ def split_list(lst, n):
     k, m = divmod(len(lst), n)
     return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]
 
+def read_file(filename):
+    with open(filename, "r") as f:
+        return f.read()
+
 #######################################
 # SPARQL RESULT FUNCTIONS AND CLASSES #
 #######################################
@@ -86,48 +90,8 @@ class Ontology:
 ########################
 
 def get_data_properties(url_endpoint):
-    query = """
-        PREFIX schema: <http://schema.org/>
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
 
-        SELECT DISTINCT ?term 
-            ?label
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            ?description ?ontology
-        WHERE {
-            ?term a owl:DatatypeProperty .
-            FILTER(!isBlank(?term))  # Exclude blank nodes
-            
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-            OPTIONAL { ?term rdfs:domain ?domain . }
-            OPTIONAL { ?term rdfs:range ?range . }
-            OPTIONAL { ?term rdfs:label ?rdfs_label . }
-            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
-            OPTIONAL { ?term skos:altLabel ?altLabel . }
-            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
-            OPTIONAL { ?term schema:name ?schemaName . }
-
-
-            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
-
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-        }
-        GROUP BY ?term ?label ?description ?ontology
-
-    """
+    query = read_file("sparql_queries/data_properties.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -163,46 +127,7 @@ def get_data_properties(url_endpoint):
     return all_data
 
 def get_object_properties(url_endpoint):
-    query = """
-        PREFIX schema: <http://schema.org/>
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
-
-        SELECT DISTINCT ?term 
-            ?label
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            ?description ?ontology
-        WHERE {
-            ?term a owl:ObjectProperty .
-            FILTER(isIri(?term))  # Exclude blank nodes
-            
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-            OPTIONAL { ?term rdfs:domain ?domain . }
-            OPTIONAL { ?term rdfs:range ?range . }
-            OPTIONAL { ?term rdfs:label ?rdfs_label . }
-            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
-            OPTIONAL { ?term skos:altLabel ?altLabel . }
-            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
-            OPTIONAL { ?term schema:name ?schemaName . }
-
-
-            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
-
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-        }
-        GROUP BY ?term ?label ?description ?ontology
-
-    """
+    query = read_file("sparql_queries/object_properties.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -240,50 +165,7 @@ def get_object_properties(url_endpoint):
     return all_data
 
 def get_classes(url_endpoint):
-    query = """
-PREFIX schema: <http://schema.org/>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-PREFIX dc: <http://purl.org/dc/elements/1.1/>
-PREFIX dcterms: <http://purl.org/dc/terms/>
-PREFIX dbo: <http://dbpedia.org/ontology/>
-PREFIX dbp: <http://dbpedia.org/property/>
-PREFIX terms: <http://purl.org/dc/terms/>
-
-SELECT DISTINCT ?term ?label
-(GROUP_CONCAT(DISTINCT ?subclass; SEPARATOR=", ") AS ?subclasses)
-(GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
-?description ?ontology
-WHERE {
-    ?term a owl:Class . 
-    FILTER(isIri(?term))  # Exclude blank nodes
-
-    OPTIONAL { ?subclass rdfs:subClassOf ?term . FILTER( isIRI(?subclass) && isIRI(?term) )} 
-    OPTIONAL { ?term rdfs:subClassOf ?superclass . FILTER( isIRI(?superclass) && isIRI(?term) ) }
-
-    BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-    OPTIONAL { ?term rdfs:label ?rdfs_label . }
-    OPTIONAL { ?term skos:prefLabel ?prefLabel . }
-    OPTIONAL { ?term skos:altLabel ?altLabel . }
-    OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
-  	OPTIONAL { ?term schema:name ?schemaName . }
-
-
-    BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
-
-    OPTIONAL { ?term terms:description ?description . }
-    OPTIONAL { ?term schema:description ?description . }
-  	OPTIONAL { ?term skos:definition ?description . }
- 	OPTIONAL { ?term <http://purl.obolibrary.org/obo/IAO_0000115> ?description . }
-    OPTIONAL { ?term rdfs:comment ?description . }
-}
-GROUP BY ?term ?label ?description ?ontology
-    """
-
+    query = read_file("sparql_queries/classes.sparql")
     
     # TODO: Get the ?labels
     # Do the check for similar basename between the term and the ontology that contains the term 
@@ -324,52 +206,7 @@ GROUP BY ?term ?label ?description ?ontology
     return all_data
 
 def get_individuals(url_endpoint):
-    query = """
-        PREFIX schema: <http://schema.org/>
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
-
-        SELECT DISTINCT ?term 
-            ?label
-            ?class 
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            ?description ?ontology 
-        WHERE {
-            ?term rdf:type ?class .
-            FILTER(!isBlank(?term))  # Exclude blank nodes
-            FILTER(!isBlank(?class))  # Exclude blank classes
-            
-            OPTIONAL { ?term rdfs:domain ?domain . FILTER(!isBlank(?domain)) }
-            OPTIONAL { ?term rdfs:range ?range . FILTER(!isBlank(?range)) }
-
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            OPTIONAL { ?term rdfs:label ?rdfs_label . }
-            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
-            OPTIONAL { ?term skos:altLabel ?altLabel . }
-            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
-            OPTIONAL { ?term schema:name ?schemaName . }
-
-
-            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
-
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-
-        }
-        GROUP BY ?term ?label ?class ?description ?ontology
-
-
-    """
+    query = read_file("sparql_queries/individuals.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -408,50 +245,7 @@ def get_individuals(url_endpoint):
 
 def get_rdf_datatypes(url_endpoint):
 
-    query = """
-            PREFIX schema: <http://schema.org/>
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX dc: <http://purl.org/dc/elements/1.1/>
-            PREFIX dcterms: <http://purl.org/dc/terms/>
-            PREFIX dbo: <http://dbpedia.org/ontology/>
-            PREFIX dbp: <http://dbpedia.org/property/>
-            PREFIX terms: <http://purl.org/dc/terms/>
-
-            SELECT DISTINCT ?term 
-            ?label
-            (GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
-            ?description ?ontology
-            WHERE {
-            # Identifying the datatype
-            ?term a rdfs:Datatype.
-
-            # Identifying superclasses (if any)
-            OPTIONAL { ?term rdfs:subClassOf ?superclass . }
-
-            # Attempting to retrieve the ontology URI from the datatype's base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            # Filtering out unwanted namespaces
-
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?rdfs_label . }
-            OPTIONAL { ?term skos:prefLabel ?prefLabel . }
-            OPTIONAL { ?term skos:altLabel ?altLabel . }
-            OPTIONAL { ?term skos:hiddenLabel ?hiddenLabel . }
-            OPTIONAL { ?term schema:name ?schemaName . }
-
-
-            BIND(COALESCE(?rdfs_label, ?prefLabel, ?altLabel, ?schemaName, ?hiddenLabel ) AS ?label)
-
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-            }
-            GROUP BY ?term ?label ?description ?ontology"""
+    query = read_file("sparql_queries/rdf_datatypes.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -747,3 +541,5 @@ def embed_ontology_dataproperties(data, model):
     formatted_str = f"{data.dataproperties}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
+
+    
