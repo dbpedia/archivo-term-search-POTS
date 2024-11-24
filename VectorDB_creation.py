@@ -48,7 +48,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 hf_key = os.getenv("HF_KEY")
 url_endpoint =  os.getenv("SPARQL_ENDPOINT")
 weaviate_address = os.getenv("WEAVIATE_ADDRESS")
-create_new = os.getenv("DELETE_OLD_INDEX")
+create_new = os.getenv("DELETE_OLD_INDEX", False)
 empty_property_embedding_strategy = os.getenv("EMPTY_ARRAY_PROPERTY_SLOT_FILLING_STRATEGY")
 
 # Flag to designate indexer success / failure on exit
@@ -56,7 +56,9 @@ global exception_happened
 exception_happened = False
 
 # Available models
-model_names = ["LaBSE"]
+model_names = ["LaBSE"] # GET EMBEDDED MODELS
+# TODO: WHEN NAMING THE VECTORS ALSO ACCOUNT FOR NON EMBEDDED
+
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
 languages = ["en", "fr", "None"]
@@ -343,7 +345,7 @@ def create_object_property_collection():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
         return {"error": True}
@@ -481,7 +483,7 @@ def create_class_collection():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
         return {"error": True}
@@ -607,7 +609,7 @@ def class_collection_creation_hf_integration():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
         return {"error": True}
@@ -728,7 +730,7 @@ def create_individuals_collection():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
             
         return {"error": True}
@@ -773,6 +775,8 @@ def format_data_property_query_results(endpoint_query_results, methodologies, mo
 
         # Infer the label from TermIRI if it's not provided
         if not result_doc.label:
+            
+            # TODO: Make this configurable
             if "#" in result_doc.termIRI:
                 formatted_object["Label"] = result_doc.termIRI.split("#")[1]
             elif "/" in result_doc.termIRI:
@@ -859,7 +863,7 @@ def create_data_property_collection():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
         return {"error": True}
@@ -981,7 +985,7 @@ def create_rdftype_collection():
             
             return {"uploaded": successes}
         except Exception as e:
-            logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+            logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
             exception_happened = True
             
             return {"error": True}
@@ -1101,7 +1105,7 @@ def ontology_collection_creation():
         
         return {"uploaded": successes}
     except Exception as e:
-        logger.error("Error during insert_many: %s %s", traceback.format_exc(), exc_info=e)
+        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
         
         return {"error": True}
@@ -1151,6 +1155,7 @@ if __name__ == "__main__":
             writer.writerow(["Exsiting collections"])
             # Write the collection statuses
             writer.writerow(collections_at_beginning)
+        
         if create_new:
             client.collections.delete_all()
             collections_after_delete = [collection_name for collection_name in client.collections.list_all(simple=True)]
@@ -1165,48 +1170,49 @@ if __name__ == "__main__":
                 # Write the collection statuses
                 writer.writerow(collections_after_delete)
 
-        try:
-            # Create stats for each collection
-            object_property_stats = create_object_property_collection()
-            data_property_stats = create_data_property_collection()
-            class_stats = create_class_collection()
-            rdftype_stats = create_rdftype_collection()
-            individuals_stats = create_individuals_collection()
+            try:
+                # Create stats for each collection
+                object_property_stats = create_object_property_collection()
+                data_property_stats = create_data_property_collection()
+                class_stats = create_class_collection()
+                rdftype_stats = create_rdftype_collection()
+                individuals_stats = create_individuals_collection()
 
-            # Fill in copied named vectors
-            fill_object_property_copied_named_vectors()
-            fill_data_property_copied_named_vectors()
-            fill_class_copied_named_vectors()
-            fill_rdftype_copied_named_vectors()
-            fill_individuals_copied_named_vectors()
+                # # Fill in copied named vectors
+                fill_object_property_copied_named_vectors()
+                fill_data_property_copied_named_vectors()
+                fill_class_copied_named_vectors()
+                fill_rdftype_copied_named_vectors()
+                fill_individuals_copied_named_vectors()
 
-            # Collect collection statuses
-            status_data = [
-                get_collection_status("Object Property", object_property_stats),
-                get_collection_status("Data Property", data_property_stats),
-                get_collection_status("Class", class_stats),
-                get_collection_status("RDFType", rdftype_stats),
-                get_collection_status("Individuals", individuals_stats)
-            ]
+                # Collect collection statuses
+                status_data = [
+                    get_collection_status("Object Property", object_property_stats),
+                    get_collection_status("Data Property", data_property_stats),
+                    get_collection_status("Class", class_stats),
+                    get_collection_status("RDFType", rdftype_stats),
+                    get_collection_status("Individuals", individuals_stats)
+                ]
 
-            # Write the data to the CSV file
-            with open(csv_file_name, mode='a', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                # Write the header
-                writer.writerow([])
-                writer.writerow(["END OF COLLECTION CREATION SCRIPT"])
-                writer.writerow(["Collection Name", "Status", "Items Processed"])
-                # Write the collection statuses
-                writer.writerows(status_data)
+                # Write the data to the CSV file
+                with open(csv_file_name, mode='a', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    # Write the header
+                    writer.writerow([])
+                    writer.writerow(["END OF COLLECTION CREATION SCRIPT"])
+                    writer.writerow(["Collection Name", "Status", "Items Processed"])
+                    # Write the collection statuses
+                    writer.writerows(status_data)
 
-            print(f"Collection statuses saved to {csv_file_name}")
+                print(f"Collection statuses saved to {csv_file_name}")
 
-        except Exception as e:
-            logger.error(e, traceback.format_exc())
-            exception_happened = True
+            except Exception as e:
+                logger.error(e, traceback.format_exc())
+                exception_happened = True
 
-        finally:
-            if exception_happened:
-                sys.exit(1)
+            finally:
+                if exception_happened:
+                    # TODO: Error message to look at logs
+                    sys.exit(1)
 
-            sys.exit(0)
+                sys.exit(0)
