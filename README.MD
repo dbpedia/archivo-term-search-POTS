@@ -1,4 +1,4 @@
-# Ontology Terms MetaV+ Search
+# *POTS* - Polyparadigmatic Ontology Term Search
 
 Ontology Terms MetaV+ Search is an advanced ontology and terminology search tool that allows filtering for terms and ontologies based on semantic search (via vector embeddings) but also classic string matching filters. The filter can be applied for individual metadata properties of the terms (e.g. label, description, domain/range of an). This enables more precise and context-aware search results, enhancing the discovery and utilization of ontological data especially for LLM-driven use-cases.
 
@@ -26,7 +26,7 @@ Depending on the combinations of filters defined, different kinds of query types
 * `fuzzy_filters` is set => near_vector or hybrid search (with optional string-matching filtering applied)
 * `fuzzy_filters` and `exact_filters` empty => invalid search
 
-```json
+```jsonc
 {
   "fuzzy_filters": {  // OPTIONAL fuzzy filters (vector-embedding-based search)
       "label": "Termlabel", // OPTIONAL filter by label
