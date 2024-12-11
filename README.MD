@@ -1,6 +1,6 @@
 # *POTS* - Polyparadigmatic Ontology Term Search
 
-*POTS* is an advanced ontology and terminology search tool that allows filtering for terms and ontologies based on semantic search (via vector embeddings) but also classic string matching filters. The filter can be applied for individual metadata properties of the terms (e.g. label, description, domain/range of an). This enables more precise and context-aware search results, enhancing the discovery and utilization of ontological data especially for LLM-driven use-cases.
+*POTS* is an advanced ontology and terminology search tool that allows filtering for terms and ontologies based on semantic search (via vector embeddings) but also classic string matching filters. The filter can be applied for individual metadata properties of the terms (e.g. label, description, domain/range, etc.). This enables more precise and context-aware search results, enhancing the discovery and utilization of ontological data especially for LLM-driven use-cases.
 
 ## Search API
 
