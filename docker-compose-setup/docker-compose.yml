@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  
+  indexer:
+    profiles: [indexing]
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
+    depends_on:
+      - weaviate
+    env_file: compose-config.env
+    environment:
+      SPARQL_ENDPOINT: ${ONTOLOGIES_SPARQL_ENDPOINT:? CONFIG PROBLEM - ONTOLOGIES_SPARQL_ENDPOINT is not set. Options to fix - 1) set in .env file 2) pass as environment variable e.g. ONTOLOGIES_SPARQL_ENDPOINT=... docker-compose up  or 3) additionally activate ontology auto-loading via embedded SPARQL endpoint (see README.md)} 
+      DELETE_OLD_INDEX: ${DELETE_OLD_INDEX}
+      WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
+      WEAVIATE_GRPC_URI: ${WEAVIATE_GRPC_URI:-http://weaviate:50051}
+    command: >
+      /bin/bash -c "source activate onto_search_env && sleep 5 && python VectorDB_creation.py"
+
+  api:
+    profiles: [serve-api]
+    build:
+      context: ../
+      dockerfile: docker-compose-setup/Dockerfile
+      args:
+        CODE_ORIGIN: ${CODE_ORIGIN:-clone_github}
+    depends_on:
+      - weaviate
+    ports:
+      - "${SEARCH_API_EXPOSED_PORT:-127.0.0.1:8014}:8014"
+    env_file: compose-config.env
+    environment:
+      WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
+      WEAVIATE_GRPC_URI: ${WEAVIATE_GRPC_URI:-http://weaviate:50051}
+    command: >
+      /bin/bash -c "source activate onto_search_env && sleep 5 && python API_main.py"
+
+  weaviate:
+    profiles: [indexing, serve-api]
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --scheme
+      - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
+    # ports:
+    # - 8012:8080
+    # - 50053:50051
+    volumes:
+    - ./weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      CLUSTER_HOSTNAME: 'node1'

@@ -1,0 +1,22 @@
+# this is a template service for a setting up huggingface transformers models as text2vec-transformers for Weaviate
+# template can be used as a "base-service-definition" for "instantiating" many services of it via extend see e.g. docker-compose.weav-custom-hf.yml
+version: '3.8'
+
+services:
+
+# template service; change the service-name and adjust MODEL_NAME, exposed ports (if needed) and optionally environment var for startup of the model
+  custom-t2v-hf-transformer-base-config:
+    profiles: [downloading,indexing,serve-api]
+    image: semitechnologies/transformers-inference:custom-1.9.6 # see https://github.com/weaviate/t2v-transformers-models/tree/d7d8312d5b58d3f7fd5220485961d8ca746c2d57 for download.py and Dockerfile
+    environment:
+      MODEL_NAME: 'YOU NEED TO specify a huggingface model name'  # huggingface transformers model name is invalid since this template is not supposed to be used directly
+      ENABLE_CUDA: '0'
+      EXIT_AFTER_DOWNLOAD: '${EXIT_AFTER_DOWNLOAD:-0}' # if set to 1 the model will only be downloaded and not started
+    entrypoint: ["/bin/sh", "-c", "/app/load-and-start-transformer.sh"] # overwrite the default entrypoint to download the model intially from web
+                                                                        # but for subsequent runs from volume and start the transformers-inference api server
+    volumes:
+      - /app/models # persist the downloaded model in an anonymous volume per container/service
+      - ./cached-downloader-transformers-entrypoint.sh:/app/load-and-start-transformer.sh:ro # mount our custom entrypoint script
+    security_opt: # todo this needs to be refined is needed for letting the transformes-inference container start threads
+      - seccomp:unconfined
+

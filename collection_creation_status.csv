@@ -1,0 +1,15 @@
+START OF COLLECTION CREATION SCRIPT
+Exsiting collections
+DataProperties,Individuals,ObjectProperties,Classes,RDFtypes
+
+AFTER DELETION ISSUED
+Exsiting collections
+
+
+END OF COLLECTION CREATION SCRIPT
+Collection Name,Status,Items Processed
+Object Property,Successfully created,6
+Data Property,Successfully created,6
+Class,Successfully created,12
+RDFType,Successfully created,0
+Individuals,Successfully created,372

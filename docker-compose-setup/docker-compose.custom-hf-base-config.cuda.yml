@@ -1,0 +1,20 @@
+# this is a template service for a setting up huggingface transformers models as text2vec-transformers for Weaviate but with access to gpu
+# template can be used as a "base-service-definition" for "instantiating" many services of it via extend see e.g. docker-compose.weav-custom-hf.yml
+version: '3.8'
+
+services:
+
+# template service extending base-template but with access to gpu
+  custom-t2v-hf-transformer-base-config:
+    environment:
+      ENABLE_CUDA: '1'
+    extends: # use "template" service that only loads the model on first run and then uses the cached model 
+      file: docker-compose.custom-hf-base-config.yml
+      service: custom-t2v-hf-transformer-base-config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

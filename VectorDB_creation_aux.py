@@ -2,31 +2,46 @@ import os
 import requests
 import json
 from SPARQLWrapper import SPARQLWrapper, JSON
-
-# Gets data from the sparql endpoint
-# Results come in the format [Term, Label, Description, Domain, Range, Language]
-# Results are "None", when applicable, except Label, where it will try to create one
-def get_data(url_endpoint, type="object_properties"):
-    func_dict = {
-        "data_properties": get_data_properties,
-        "object_properties": get_object_properties,
-        "classes": get_classes,
-        "individuals": get_individuals,
-        "RDF_types": get_rdf_datatypes,
-        "Ontologies": get_ontologies
-    }
-    return func_dict[type](url_endpoint)
 from dataclasses import dataclass, field
 from typing import List
 
-# Base class
+def generate_empty_embedding(model):
+    return model.embed_query("")
+
+def split_list(lst, n):
+    k, m = divmod(len(lst), n)
+    return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]
+
+def read_file(filename):
+    with open(filename, "r") as f:
+        return f.read()
+
+#######################################
+# SPARQL RESULT FUNCTIONS AND CLASSES #
+#######################################
+
+# Gets data from the sparql endpoint
+def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
+    func_dict = {
+        "DataProperties": get_data_properties,
+        "ObjectProperties": get_object_properties,
+        "Classes": get_classes,
+        "Individuals": get_individuals,
+        "RDFtypes": get_rdf_datatypes,
+        "Ontologies": get_ontologies
+    }
+    # Results come in the format [Term, Label, Description, Domain, Range, Language]
+    # Results are "None", when applicable, except Label, where it will try to create one
+    return func_dict[type](url_endpoint)
+
+# Base SPARQL result class
 @dataclass
 class ResultDocument:
     termIRI: str = "None"
     rdfType: str = "None"
-    label: str = "None"
+    label: list[str] = field(default_factory=list)
     description: str = "None"
-    #language: str = "None"
+    language: str = "None"
     ontology: str = "None"
 
 # Individual class inheriting from ResultDocument
@@ -41,8 +56,6 @@ class Class(ResultDocument):
     subclass: List[str] = field(default_factory=list)
     superclass: List[str] = field(default_factory=list)
 
-"Creative Work"
-["Work"] -> [namedVector["Work"]]
 # DatatypeProperty class inheriting from ResultDocument
 @dataclass
 class DatatypeProperty(ResultDocument):
@@ -72,63 +85,13 @@ class Ontology:
     dataproperties: List[str] = field(default_factory=list)
     language: str = "None"
 
-
-old_namefilters = """            FILTER(!REGEX(STR(?term),"http://www.w3.org/2002/07/owl#","i"))
-            FILTER(!REGEX(STR(?term),"http://www.w3.org/2000/01/rdf-schema#","i"))
-            FILTER(!REGEX(STR(?term),"http://www.w3.org/1999/02/22-rdf-syntax-ns#","i"))
-            FILTER(!REGEX(STR(?term),"http://www.w3.org/2001/XMLSchema#","i"))  
-            FILTER(!REGEX(STR(?term),"http://www.ontotext.com/","i"))  
-            FILTER(!REGEX(STR(?term),"nodeID","i"))"""
+########################
+# COLLECTION FUNCTIONS #
+########################
 
 def get_data_properties(url_endpoint):
-    query = """
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
 
-        SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            ?description ?ontology
-        WHERE {
-            # Identifying data properties
-            ?term a owl:DatatypeProperty .
-            
-            # Attempting to retrieve the ontology URI from the property’s base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            # Identifying domain and range
-            OPTIONAL { ?term rdfs:domain ?domain . }
-            OPTIONAL { ?term rdfs:range ?range . }
-
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
-            
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-            
-            # Filtering out unwanted namespaces
-
-        }
-        GROUP BY ?term ?label ?description ?ontology
-
-    """
+    query = read_file("sparql_queries/data_properties.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -164,57 +127,13 @@ def get_data_properties(url_endpoint):
     return all_data
 
 def get_object_properties(url_endpoint):
-    query = """
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
-
-        SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            ?description ?ontology
-        WHERE {
-            # Identifying object properties
-            ?term a owl:ObjectProperty .
-            
-            # Attempting to retrieve the ontology URI from the property’s base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            # Identifying domain and range
-            OPTIONAL { ?term rdfs:domain ?domain . }
-            OPTIONAL { ?term rdfs:range ?range . }
-
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
-            
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-            
-
-        }
-        GROUP BY ?term ?label ?description ?ontology
-    """
+    query = read_file("sparql_queries/object_properties.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
     sparql.setReturnFormat(JSON)
     results = sparql.query().convert()["results"]["bindings"]
+  
     all_data = []
     for r in results:
         doc = ObjectProperty()
@@ -246,54 +165,7 @@ def get_object_properties(url_endpoint):
     return all_data
 
 def get_classes(url_endpoint):
-    query = """
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
-
-        SELECT DISTINCT ?term 
-            
-            (GROUP_CONCAT(DISTINCT ?label; SEPARATOR="--||||--||||--") AS ?labels)
-            (GROUP_CONCAT(DISTINCT ?subclass; SEPARATOR=", ") AS ?subclasses)
-            (GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
-            ?description ?ontology
-            
-        WHERE {
-            # Identifying the class
-            ?term a owl:Class.
-
-            # Identifying subclasses and superclasses
-            OPTIONAL { ?subclass rdfs:subClassOf ?term . } 
-            OPTIONAL { ?term rdfs:subClassOf ?superclass . }
-
-            # Attempting to retrieve the ontology URI from the class's base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-            # TODO: turn this into a BIND command: (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
-            
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
-
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . } 
-        }
-        GROUP BY ?term ?label ?description ?ontology 
-
-    """
+    query = read_file("sparql_queries/classes.sparql")
     
     # TODO: Get the ?labels
     # Do the check for similar basename between the term and the ontology that contains the term 
@@ -334,70 +206,7 @@ def get_classes(url_endpoint):
     return all_data
 
 def get_individuals(url_endpoint):
-    query = """
-        PREFIX owl: <http://www.w3.org/2002/07/owl#>
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-        PREFIX dc: <http://purl.org/dc/elements/1.1/>
-        PREFIX dcterms: <http://purl.org/dc/terms/>
-        PREFIX dbo: <http://dbpedia.org/ontology/>
-        PREFIX dbp: <http://dbpedia.org/property/>
-        PREFIX terms: <http://purl.org/dc/terms/>
-
-        SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
-            ?class 
-            (GROUP_CONCAT(DISTINCT ?domain; SEPARATOR=", ") AS ?domains)
-            (GROUP_CONCAT(DISTINCT ?range; SEPARATOR=", ") AS ?ranges)
-            (GROUP_CONCAT(DISTINCT ?domainlabel; SEPARATOR=", ") AS ?domainlabels)
-            ?description ?ontology 
-        WHERE {
-            # Identifying individuals and their classes
-            ?term rdf:type ?class .
-            
-            # Ensuring that ?term is not a class or involved in subclass relationships
-            FILTER NOT EXISTS { ?term rdf:type owl:Class }
-            FILTER NOT EXISTS { ?term rdf:type rdfs:Class }
-            FILTER NOT EXISTS { ?term rdfs:subClassOf ?anyClass }
-            FILTER NOT EXISTS { ?term owl:equivalentClass ?anyClass }
-            
-            # Explicitly filter out common classes or mistaken individuals
-            FILTER(?class != owl:Class)
-            FILTER(?class != rdfs:Class)
-            
-            # Identifying properties that have the individual's class as their domain or range
-            OPTIONAL { ?term rdfs:domain ?domain . }
-            OPTIONAL { ?term rdfs:range ?range . }
-
-            # Attempting to retrieve the ontology URI from the individual's base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            # Filtering out unwanted namespaces
-
-            
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
-            
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-            
-            
-            OPTIONAL { ?domain rdfs:label ?domainlabel . }
-            OPTIONAL { ?domain skos:prefLabel ?domainlabel . }
-        }
-        GROUP BY ?term ?label ?class ?description ?ontology
-
-    """
+    query = read_file("sparql_queries/individuals.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -414,8 +223,8 @@ def get_individuals(url_endpoint):
             doc.label = r["label"]["value"]
 
 
-        if "domainlabels" in r.keys():
-            doc.domainlabels = r["domainlabels"]["value"].split(", ")
+        if "domains" in r.keys():
+            doc.domain = r["domains"]["value"].split(", ")
         if "ranges" in r.keys():
             doc.range = r["ranges"]["value"].split(", ")
         if "description" in r.keys():
@@ -436,48 +245,7 @@ def get_individuals(url_endpoint):
 
 def get_rdf_datatypes(url_endpoint):
 
-    query = """PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX dc: <http://purl.org/dc/elements/1.1/>
-            PREFIX dcterms: <http://purl.org/dc/terms/>
-            PREFIX dbo: <http://dbpedia.org/ontology/>
-            PREFIX dbp: <http://dbpedia.org/property/>
-            PREFIX terms: <http://purl.org/dc/terms/>
-
-            SELECT DISTINCT ?term 
-            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
-            (GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
-            ?description ?ontology
-            WHERE {
-            # Identifying the datatype
-            ?term a rdfs:Datatype.
-
-            # Identifying superclasses (if any)
-            OPTIONAL { ?term rdfs:subClassOf ?superclass . }
-
-            # Attempting to retrieve the ontology URI from the datatype's base URI or RDF context
-            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
-
-            # Filtering out unwanted namespaces
-
-            # Attempting to retrieve labels
-            OPTIONAL { ?term rdfs:label ?label . }
-            # OPTIONAL { ?term foaf:name ?label . }
-            OPTIONAL { ?term skos:prefLabel ?label . }
-            OPTIONAL { ?term dc:title ?label . }
-            OPTIONAL { ?term dcterms:title ?label . }
-            # OPTIONAL { ?term dbo:name ?label . }
-            # OPTIONAL { ?term dbp:name ?label . }
-            # OPTIONAL { ?term rdf:ID ?label . }
-
-            # Attempting to retrieve description
-            OPTIONAL { ?term terms:description ?description . }
-            OPTIONAL { ?term rdfs:comment ?description . }
-            }
-            GROUP BY ?term ?label ?description ?ontology"""
+    query = read_file("sparql_queries/rdf_datatypes.sparql")
     sparql = SPARQLWrapper(url_endpoint)
     sparql.setQuery(query)
     
@@ -493,8 +261,8 @@ def get_rdf_datatypes(url_endpoint):
                 doc.language = r["label"]["xml:lang"]
             doc.label = r["label"]["value"]
 
-        if "superclasses" in r.keys():
-            doc.superclass = r["superclasses"]["value"].split(", ")
+        if "superclass" in r.keys():
+            doc.superclass = r["superclass"]["value"].split(", ")
         if "description" in r.keys():
             if "xml:lang" in r["description"].keys():
                 doc.language = r["description"]["xml:lang"]
@@ -690,7 +458,7 @@ def get_ontologies(url_endpoint):
         doc.classes = list(set([x.get("class", {}).get("value", "") for x in ontology_details]))
         doc.dataproperties = list(set([x.get("dataproperty", {}).get("value", "") for x in ontology_details]))
         # doc.individualsCount = int(ontology_detail.get("individualCount", {}).get("value", 0))
-        print(doc.classes)
+        #print(doc.classes)
         return doc
 
     # Get all ontology names
@@ -704,35 +472,36 @@ def get_ontologies(url_endpoint):
             all_ontology_data.append(ontology_data)
     
     return all_ontology_data
-# Embeds using the IRI + label
+
+# Embeds using the label
 def embed_using_label(data, model):
 
     formatted_str = f"{data.label}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
     
-# Embeds using the IRI + description
+# Embeds using the description
 def embed_using_desc(data, model):
 
     formatted_str = f"{data.description}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + domain + range
+# Embeds using the domain + range
 def embed_using_domain_plus_range(data, model):
    
     formatted_str = f"{data.domain} + {data.range}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + domain
+# Embeds using the domain
 def embed_using_domain(data, model):
     
     formatted_str = f"{data.domain}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + range
+# Embeds using the range
 def embed_using_range(data, model):
     
     formatted_str = f"{data.range}"
@@ -753,13 +522,14 @@ def embed_using_superclass(data, model):
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-# Embeds using the IRI + subclass + superclass
+# Embeds using the subclass + superclass
 def embed_using_subclass_plus_superclass(data, model):
     
     formatted_str = f"{data.subclass} + {data.superclass}"
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
+# TODO: FIX ONTOLOGY FUNCTIONS
 def embed_ontology_classes(data, model):
     
     formatted_str = f"{data.classes}"
@@ -772,8 +542,4 @@ def embed_ontology_dataproperties(data, model):
     #print("Embedding", formatted_str)
     return model.embed_query(formatted_str)
 
-
-
-def split_list(lst, n):
-    k, m = divmod(len(lst), n)
-    return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]
+    
