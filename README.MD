@@ -41,8 +41,8 @@ Depending on the combinations of filters defined, different kinds of query types
   },
   "exact_filters": { // OPTIONAL
       "term_type":  "", 
-      "rdf_type": "http://www.w3.org/2002/07/owl#Class", //OPTIONAL rdf:type 
-      "ontology": "http://myOntologyNamespace.com/ThatIsUsedAsPrefix" // OPTIONAL
+      "rdf_type": "http://www.w3.org/2002/07/owl#SymmetricProperty", //OPTIONAL one of the rdf:type values to filter for
+      "ontology": "http://myOntologyNamespace.com/WhichIsUsedAsPrefixForTheTerms" // OPTIONAL 
       // .. more metadata fields depending on the term type 
   },
   "result_limit": 10 // OPTIONAL 
