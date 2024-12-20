@@ -51,6 +51,67 @@ Depending on the combinations of filters defined, different kinds of query types
 
 #### fuzzy_filters
 
+Possible search fields in "fuzzy_filters" for each term type
+
+Class: Subclass, superclass, label, description, ontology 
+DataProperty: Domain, range, label, description, ontology 
+ObjectProperty: Domain, range, label, description, ontology
+
+Examples: 
+- Example 1 (Class):
+{ 
+  "fuzzy_filters": { // OPTIONAL fuzzy filters (vector-embedding-based search) 
+      "label": "animal",                                                       // OPTIONAL filter by label   
+      "description": "A living organism that belongs to the kingdom Animalia", // OPTIONAL 
+      "ontology": "examples",                                                  // OPTIONAL 
+      "subclass": "dog",                                                       // OPTIONAL 
+      "superclass": "living being"                                             // OPTIONAL 
+  }, 
+  "fuzzy_filter_configs": {                                                    // only REQUIRED if fuzzy_filters is used 
+      "model_name": "name_of_embedding_model_to_use",                          // REQUIRED IF FUZZY 
+      "lang": "en",                                                            // OPTIONAL (default is en) 
+  }, 
+  "exact_filters": {                                                           // OPTIONAL 
+      "term_type": "Class" 
+  }, 
+}
+
+- Example 2 (Object Property:
+{ 
+  "fuzzy_filters": {                                                           // OPTIONAL fuzzy filters (vector-embedding-based search) 
+      "label": "has father",                                                   // OPTIONAL filter by label 
+      "description": "someone's father",                                       // OPTIONAL 
+      "ontology": "examples",                                                  // OPTIONAL 
+      "domain": "person",                                                      // OPTIONAL 
+      "range": "male"                                                          // OPTIONAL 
+  }, 
+  "fuzzy_filter_configs": {                                                    // only REQUIRED if fuzzy_filters is used 
+      "model_name": "name_of_embedding_model_to_use",                          // REQUIRED IF FUZZY 
+      "lang": "en",                                                            // OPTIONAL (default is en) 
+  }, 
+  "exact_filters": {                                                           // OPTIONAL 
+      "term_type": "ObjectProperty" 
+  }, 
+} 
+
+- Example 3 (Data Property):
+{ 
+  "fuzzy_filters": {                                                           // OPTIONAL fuzzy filters (vector-embedding-based search) 
+      "label": "has birthday",                                                 // OPTIONAL filter by label 
+      "description": "someone's birthday",                                     // OPTIONAL 
+      "ontology": "examples",                                                  // OPTIONAL 
+      "domain": "living being",                                                // OPTIONAL 
+      "range": "date"                                                          // OPTIONAL 
+  }, 
+  "fuzzy_filter_configs": {                                                    // only REQUIRED if fuzzy_filters is used 
+      "model_name": "name_of_embedding_model_to_use",                          // REQUIRED IF FUZZY 
+      "lang": "en",                                                            // OPTIONAL (default is en) 
+  }, 
+  "exact_filters": {                                                           // OPTIONAL 
+      "term_type": "DataProperty" 
+  }, 
+}
+
 ## Setup / Deployment
 
 ### requirements
