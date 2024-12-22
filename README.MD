@@ -53,12 +53,15 @@ Depending on the combinations of filters defined, different kinds of query types
 
 Possible search fields in "fuzzy_filters" for each term type
 
+```
 Class: Subclass, superclass, label, description, ontology 
 DataProperty: Domain, range, label, description, ontology 
 ObjectProperty: Domain, range, label, description, ontology
+``` 
 
 Examples: 
 - Example 1 (Class):
+```jsonc
 { 
   "fuzzy_filters": { // OPTIONAL fuzzy filters (vector-embedding-based search) 
       "label": "animal",                                                       // OPTIONAL filter by label   
@@ -75,8 +78,10 @@ Examples:
       "term_type": "Class" 
   }, 
 }
+```
 
 - Example 2 (Object Property:
+```jsonc
 { 
   "fuzzy_filters": {                                                           // OPTIONAL fuzzy filters (vector-embedding-based search) 
       "label": "has father",                                                   // OPTIONAL filter by label 
@@ -93,8 +98,10 @@ Examples:
       "term_type": "ObjectProperty" 
   }, 
 } 
+```
 
 - Example 3 (Data Property):
+```jsonc
 { 
   "fuzzy_filters": {                                                           // OPTIONAL fuzzy filters (vector-embedding-based search) 
       "label": "has birthday",                                                 // OPTIONAL filter by label 
@@ -111,6 +118,7 @@ Examples:
       "term_type": "DataProperty" 
   }, 
 }
+```
 
 ## Setup / Deployment
 
