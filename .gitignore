@@ -3,4 +3,5 @@ __pycache__/
 virtuoso/
 ontology-data/
 .env
-.real_env
+.real_env__MAIN___ERRORS.LOG
+COLLECTION_CREATION_STATUS.CSV
