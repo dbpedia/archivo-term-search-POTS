@@ -32,9 +32,9 @@ RUN mkdir -p /tmp/onto-search/index
 RUN mkdir -p /tmp/onto-search/sparql
 
 # COPY commands with wildcards to not make the image build fail if the files do not exist
-COPY --chown=root:root nlp/* /tmp/onto-search/nlp/
-COPY --chown=root:root index/* /tmp/onto-search/index/
-COPY --chown=root:root sparql/* /tmp/onto-search/sparql/
+# COPY --chown=root:root nlp/* /tmp/onto-search/nlp/
+# COPY --chown=root:root index/* /tmp/onto-search/index/
+COPY --chown=root:root sparql_queries/* /tmp/onto-search/sparql_queries/
 COPY --chown=root:root *.py /tmp/onto-search/
 COPY --chown=root:root requirements.tx[t] /tmp/onto-search/requirements.txt
 
