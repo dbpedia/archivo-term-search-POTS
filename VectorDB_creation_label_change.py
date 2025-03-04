@@ -1,5 +1,5 @@
 
-# This script creates the database with multiple collections, each with a set of named vectors and fills each one.
+# This seems to be a modified version of VectorDB_creation.py, however, it is not clear what the purpose of this script is.
 
 import weaviate
 import weaviate.classes as wvc
@@ -19,7 +19,7 @@ import logging
 import csv
 
 load_dotenv()
-
+UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY = "infer_on_iri"
 # Create a logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Set the root logger to DEBUG to capture all log levels
@@ -59,13 +59,12 @@ global exception_happened
 exception_happened = False
 
 # Available models
-model_names = ["paraphrase-multilingual-MiniLM-L12-v2"] # GET EMBEDDED MODELS
+model_names = ["LaBSE"] # GET EMBEDDED MODELS
 # TODO: WHEN NAMING THE VECTORS ALSO ACCOUNT FOR NON EMBEDDED
 
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
-languages = ["en", "fr", "None"]
-
+languages = ["en", "fr", "es", "pt", "None"]
 
 # Generic Classes and Functions
 @dataclass
@@ -122,7 +121,7 @@ def create_named_vectors(item):
 
     return embeddings  # Return the list of embeddings
 
-def get_copied_named_vectors(all_objects, all_named_vectors, verbose=False):
+def get_copied_named_vectors(all_objects, all_named_vectors):
     # Initialize dictionaries to hold embeddings and empty embeddings
     embeddings = {}
     empty_embeddings = {}
@@ -131,9 +130,7 @@ def get_copied_named_vectors(all_objects, all_named_vectors, verbose=False):
         # Ensure a dictionary exists for each object's UUID
         if formatted_object.uuid not in embeddings:
             embeddings[formatted_object.uuid] = {}
-        if verbose:
-            with open("test.txt", "a") as file:
-                file.write("Processing "+str(formatted_object.properties["termIRI"])+"\n")
+
         for vector in all_named_vectors:
             if "___CP_SEPARATOR___" in vector:
                 # Split the vector name to extract original and copy info
@@ -154,36 +151,23 @@ def get_copied_named_vectors(all_objects, all_named_vectors, verbose=False):
                     target_uri = formatted_object.properties[property_to_find][int(index)-1]
 
                     # Query the collection for the named vector embedding
-                    result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info, verbose)
-                    
+                    result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info)
+
                     if result:
-                        if verbose:
-                            with open("test.txt", "a") as file:
-                                file.write("Found embedding\n")
-                            
                         # Store the result in the embeddings dictionary
                         embeddings[formatted_object.uuid][vector] = result
  
 
                     else:
-                        if verbose:
-                            with open("test.txt", "a") as file:
-                                file.write("DID NOT FIND EMBEDDING, MAKING EMPTY\n")
                         # If the result is not found, use an empty embedding
                         embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
 
                 else:
                     if empty_property_embedding_strategy == "empty":
-                        if verbose:
-                            with open("test.txt", "a") as file:
-                                file.write("Using empty embedding to pad\n")
                         # If the property index is out of range, use an empty embedding
                         embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
                     elif empty_property_embedding_strategy == "average":
                         if int(index) > 1:
-                            if verbose:
-                                with open("test.txt", "a") as file:
-                                    file.write("Doing weird average embedding to pad\n")
                             # If the property index is out of range, fall back to average of previous vectors
                             previous_vectors = []
                             for i in range(1, int(index)):
@@ -218,13 +202,10 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
             # Update the collection with the vector mappings
             collection.data.update(uuid, vector=uuid_to_nv_mappings[uuid])
 
-def query_collection_for_NV_embedding(target_collection, target_uri, target_named_vector, verbose=False):
+def query_collection_for_NV_embedding(target_collection, target_uri, target_named_vector):
     # Fetch the specified collection
     collection = client.collections.get(name=target_collection)
-    
-    if verbose:
-        with open("test.txt", "a") as file:
-            file.write("Getting "+target_uri+" from "+target_collection+" specifically "+str(target_named_vector)+"\n")
+
     # Attempt to fetch the object by its UUID
     data_object = collection.query.fetch_object_by_id(
         uuid=generate_uuid5(target_uri),  # Generate the UUID for the target URI
@@ -268,30 +249,43 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
             "TermIRI": result_doc.termIRI,
             "RDF_type": result_doc.rdfType,
             "Ontology": result_doc.ontology,
-            "Label": result_doc.label,
             "Description": result_doc.description,
             "Domain": result_doc.domain,
             "Range": result_doc.range,
-            "Language": result_doc.language
         }
         
-        # Assign a label based on the TermIRI if no label is present
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
+        for attr in dir(result_doc):
+            if attr.startswith("label"):
+                formatted_object[attr] = getattr(result_doc, attr)
+                
+        # Infer the label from TermIRI if it's not provided
+        if len(result_doc.label_none) == 0:
+            
+            if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
+                if "#" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("#")[1]]
+                elif "/" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("/")[1]]
 
-        # Initialize a dictionary to hold embeddings for the object
-        embeddings = {}
+        embeddings = {}  # Dictionary to hold embeddings for the object
         for vector in all_named_vectors:
+            # Skip vectors with copy separator as they are handled elsewhere
             if "___CP_SEPARATOR___" not in vector.name:
                 model = vector.vectorizer
                 field_name = vector.field_name
                 case_lang = vector.language
-            
-                # Only embed if the language matches
-                if case_lang == result_doc.language:
+
+               
+                
+                # Generate embeddings only if the language matches
+                if field_name in ["Label", "Description"]:
+                    doc_has_field_in_wanted_language = hasattr(result_doc, f"{field_name.lower()}_{case_lang.lower()}")
+                    if doc_has_field_in_wanted_language:
+                        
+                        embeddings[vector.name] = methodologies[field_name](result_doc, models[model], case_lang)
+                    
+                else:
+                    
                     embeddings[vector.name] = methodologies[field_name](result_doc, models[model])
           
 
@@ -330,14 +324,6 @@ def create_object_property_collection():
     # Format objects for upload
     formatted_objects_for_upload = format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
 
-    for f in formatted_objects_for_upload:
-        print(type(f))
-        print(f[0])
-        with open("test.txt", "a") as file:
-            file.write(str(f[0])+"\n")
-            
-        
-        
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
@@ -379,7 +365,6 @@ def create_object_property_collection():
         
         return {"error": True}
         
-
 def fill_object_property_copied_named_vectors():
     
     # Fetch all objects and named vectors to fill the copied named vectors
@@ -387,10 +372,11 @@ def fill_object_property_copied_named_vectors():
     all_named_vectors = fetch_all_named_vectors(collection="ObjectProperties")
     
     # Get the mappings for the copied named vectors
-    uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors, True)
-
+    uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
+    
     # Fill the copied named vectors in the collection
     fill_copied_named_vectors(uuid_to_nv_mappings, "ObjectProperties")
+
 
 # Class Collection Functions
 
@@ -410,28 +396,31 @@ def get_class_collection_mappings():
 def format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     logger.info("Formatting objects")  # Indicate the start of formatting objects
     formatted_objects = []  # List to hold the formatted objects
-    names_and_vectors = {}
     for i, result_doc in enumerate(endpoint_query_results):
-        names_and_vectors[result_doc.termIRI] = []
         # Create a dictionary to store properties of the class
         formatted_object = {
             "TermIRI": result_doc.termIRI,
             "RDF_type": result_doc.rdfType,
             "Ontology": result_doc.ontology,
-            "Label": result_doc.label,
             "Description": result_doc.description,
             "Subclass": result_doc.subclass,
             "Superclass": result_doc.superclass,
-            "Language": result_doc.language
+            
         }
         
+        for attr in dir(result_doc):
+            if attr.startswith("label"):
+                formatted_object[attr] = getattr(result_doc, attr)
+                
         # Infer the label from TermIRI if it's not provided
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-
+        if len(result_doc.label_none) == 0:
+            
+            if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
+                if "#" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("#")[1]]
+                elif "/" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("/")[1]]
+        print("Result doc is", result_doc)
         embeddings = {}  # Dictionary to hold embeddings for the object
         for vector in all_named_vectors:
             # Skip vectors with copy separator as they are handled elsewhere
@@ -440,17 +429,29 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
                 field_name = vector.field_name
                 case_lang = vector.language
 
+               
+                
                 # Generate embeddings only if the language matches
-                if case_lang == result_doc.language:
+                if field_name in ["Label", "Description"]:
+                    doc_has_field_in_wanted_language = hasattr(result_doc, f"{field_name.lower()}_{case_lang.lower()}")
+                    if doc_has_field_in_wanted_language:
+                        
+                        if not case_lang == "None":
+                            print("Putting", field_name, "in",vector.name) 
+                            embeddings[vector.name] = methodologies[field_name](result_doc, models[model], case_lang)
+                        else:
+                            if len(getattr(result_doc, f"{field_name.lower()}_none")) > 0:
+                                print("Putting", field_name, "in",vector.name) 
+                                embeddings[vector.name] = methodologies[field_name](result_doc, models[model], "none")
+                    
+                else:
+                    print("Putting", field_name, "in",vector.name) 
                     embeddings[vector.name] = methodologies[field_name](result_doc, models[model])
-        names_and_vectors[result_doc.termIRI] = list(embeddings.keys())
+
         # Generate a UUID for the object based on its TermIRI
         uuid = generate_uuid5(result_doc.termIRI)
         formatted_objects.append([formatted_object, embeddings, uuid])  # Append formatted data
-    with open("test.txt", "a") as file:
-        for f in names_and_vectors:
-            file.write(str(f)+": "+str(names_and_vectors[f])+"\n")
-        
+    
     return formatted_objects  # Return the list of formatted objects
 
 def create_class_collection():
@@ -458,7 +459,7 @@ def create_class_collection():
     logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for Classes
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Classes")
-
+    
     # Get the models and methodologies for embedding
     methodologies = get_class_collection_mappings()
 
@@ -520,6 +521,7 @@ def create_class_collection():
         exception_happened = True
         
         return {"error": True}
+
 def fill_class_copied_named_vectors():
     # Fetch all objects and named vectors to fill the copied named vectors
     all_objects = fetch_all_objects(collection="Classes")
@@ -646,6 +648,7 @@ def class_collection_creation_hf_integration():
         exception_happened = True
         
         return {"error": True}
+
 # Individual Collection Functions
 
 def get_individuals_collection_mappings():
@@ -1204,22 +1207,27 @@ if __name__ == "__main__":
                 writer.writerow(collections_after_delete)
 
             try:
-                import time
-                # Create stats for each collection
-                object_property_stats = create_object_property_collection()
                 
-                data_property_stats = create_data_property_collection()
-                time.sleep(10)
+                object_property_stats = "N/A"
+                data_property_stats = "N/A"
+                class_stats = "N/A"
+                rdftype_stats = "N/A"
+                individuals_stats = "N/A"
+                ontology_stats = "N/A"
+                
+                # Create stats for each collection
+                #object_property_stats = create_object_property_collection()
+                # data_property_stats = create_data_property_collection()
                 class_stats = create_class_collection()
-                rdftype_stats = create_rdftype_collection()
-                individuals_stats = create_individuals_collection()
+                # rdftype_stats = create_rdftype_collection()
+                # individuals_stats = create_individuals_collection()
 
                 # # Fill in copied named vectors
-                fill_object_property_copied_named_vectors()
-                fill_data_property_copied_named_vectors()
-                fill_class_copied_named_vectors()
-                fill_rdftype_copied_named_vectors()
-                fill_individuals_copied_named_vectors()
+                # fill_object_property_copied_named_vectors()
+                # fill_data_property_copied_named_vectors()
+                #fill_class_copied_named_vectors()
+                # fill_rdftype_copied_named_vectors()
+                # fill_individuals_copied_named_vectors()
 
                 # Collect collection statuses
                 status_data = [

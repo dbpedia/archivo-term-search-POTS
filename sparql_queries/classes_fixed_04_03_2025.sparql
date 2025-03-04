@@ -1,0 +1,35 @@
+PREFIX schema: <http://schema.org/>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX terms: <http://purl.org/dc/terms/>
+
+SELECT DISTINCT ?term
+(GROUP_CONCAT(DISTINCT CONCAT(STR(?description), "|||--@@--||", LANG(?description)); SEPARATOR="|||---~~~||| ") AS ?descriptions)
+(GROUP_CONCAT(DISTINCT CONCAT(STR(?label), "|||--@@--||", LANG(?label)); SEPARATOR="|||---~~~||| ") AS ?labels)
+(GROUP_CONCAT(DISTINCT ?subclass; SEPARATOR=", ") AS ?subclasses)
+(GROUP_CONCAT(DISTINCT ?type; SEPARATOR=", ") AS ?types)
+(GROUP_CONCAT(DISTINCT ?superclass; SEPARATOR=", ") AS ?superclasses)
+?ontology
+
+WHERE {
+    ?term a owl:Class .
+    ?term a ?type.
+    FILTER(isIRI(?term))  # Exclude blank nodes
+
+    OPTIONAL { ?subclass rdfs:subClassOf ?term . FILTER(isIRI(?subclass)) }
+    OPTIONAL { ?term rdfs:subClassOf ?superclass . FILTER(isIRI(?superclass)) }
+
+    BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontology)
+
+    # Collect all labels from different properties
+    OPTIONAL {
+        ?term (rdfs:label | skos:prefLabel | skos:altLabel | skos:hiddenLabel | schema:name) ?label .
+    }
+
+    # Collect all descriptions from different properties
+    OPTIONAL {
+        ?term (terms:description | schema:description | skos:definition | <http://purl.obolibrary.org/obo/IAO_0000115> | rdfs:comment) ?description .
+    }
+}
+GROUP BY ?term ?ontology

@@ -1,3 +1,6 @@
+
+# This script demonstrates how to make API calls to the search API and runs some examples.
+
 import json
 import csv
 import os
@@ -13,7 +16,7 @@ api_endpoint = f"http://{api_hostname}/search"
 #"http://127.0.0.1:9090/search"
 
 # Define the model name
-model_name = "LaBSE"
+model_name = "paraphrase-multilingual-MiniLM-L12-v2"
 def perform_search_case(case_data, case_info, output_filename="search_results.txt"):
     print()
     print("--------------------------- QUERY ---------------------------")
@@ -28,7 +31,7 @@ def perform_search_case(case_data, case_info, output_filename="search_results.tx
     
     # Include the model_name in the case data
     response = requests.post(api_endpoint, headers=headers, data=json.dumps(case_data))
-    
+    print(response.text)
     if response.status_code == 200:
         
         response_data = json.loads(response.text)
@@ -107,7 +110,7 @@ def perform_search_case(case_data, case_info, output_filename="search_results.tx
 
         error_headers = ["! ! ! ERROR ! ! !"]
         print(f"{case_info} failed with status code {response.status_code}:")
-        
+        print(response.text)
         error = json.loads(response.text)["error"]
 
         # Generate the result table using tabulate
@@ -163,7 +166,7 @@ case_info = "INVALID KEYS 3 (searching for invalid property in collection)"
 
 data = {
     "fuzzy_filters": {"label": "parent", "subclass": "male"},
-    "fuzzy_filters_config": {"model_name": "LaBSE", "lang": "en"},
+    "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
     "exact_filters": {"termtype": "ObjectProperty"},
 }
 perform_search_case(data, case_info)
@@ -171,7 +174,7 @@ perform_search_case(data, case_info)
 case_info = "VALID 1 (simple fuzzy search)"
 data = {
     "fuzzy_filters": {"label": "parent"},
-    "fuzzy_filters_config": {"model_name": "LaBSE", "lang": "en"},
+    "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
     "limit": 3
 }
 perform_search_case(data, case_info)
@@ -180,7 +183,7 @@ case_info = "VALID 2 (complex fuzzy search)"
 
 data = {
     "fuzzy_filters": {"label": "parent", "range": "male"},
-    "fuzzy_filters_config": {"model_name": "LaBSE", "lang": "en"},
+    "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
     "limit": 3
 }
 perform_search_case(data, case_info)
@@ -196,11 +199,10 @@ perform_search_case(data, case_info)
 case_info = "VALID 4 (fuzzy + exact search)"
 
 data = {
-    "fuzzy_filters": {"label": "parent"},
-    "fuzzy_filters_config": {"model_name": "LaBSE", "lang": "en"},
-    "exact_filters": {"termtype": "ObjectProperty"},
+    "fuzzy_filters": {"range": "woman"},
+    "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
+
     "limit": 3
 }
 perform_search_case(data, case_info)
-
 
