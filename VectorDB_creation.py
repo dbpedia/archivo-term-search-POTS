@@ -339,11 +339,11 @@ def create_object_property_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -477,11 +477,11 @@ def create_class_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -603,11 +603,11 @@ def class_collection_creation_hf_integration():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -724,11 +724,11 @@ def create_individuals_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -857,11 +857,11 @@ def create_data_property_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -979,17 +979,17 @@ def create_rdftype_collection():
         try:
             successes = 0
             for i, batch in enumerate(batches):
-                logger.info("Uploading batch %d", i + 1)
+                logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
                 collection.data.insert_many(batch)
                 successes += len(batch)
             
-            return {"uploaded": successes}
+            return {"ingested terms": successes}
         except Exception as e:
             logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
             exception_happened = True
             
             return {"error": True}
-    return {"uploaded": 0}
+    return {"ingested terms": 0}
 
 def fill_rdftype_copied_named_vectors():
     all_objects = fetch_all_objects(collection="RDFtypes")
@@ -1099,11 +1099,11 @@ def ontology_collection_creation():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
+            logger.info("Uploading batch %d with %d elements", i + 1, len(batch))
             collection.data.insert_many(batch)
             successes += len(batch)
         
-        return {"uploaded": successes}
+        return {"ingested terms": successes}
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
