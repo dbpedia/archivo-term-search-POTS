@@ -960,8 +960,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
 def create_rdftype_collection():
     
     logger.info("Creating RDF_types collection")
-    logger.info("Fetching SPARQL endpoint query results")
-    endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="RDFtypes")
+    endpoint_query_results =  fetch_data_from_endpoint(url_endpoint, type="Datatypes")
 
     methodologies = get_rdftype_collection_mappings()
 
@@ -969,7 +968,7 @@ def create_rdftype_collection():
     for field_name in ["Label", "Description"]:
         for lang in languages:
             for model in models:
-                for copy_relationship, collection in [("Superclass", "RDFtypes")]:
+                for copy_relationship, collection in [("Superclass", "Datatypes")]:
 
                         all_combos.append([field_name, lang, model, "default", copy_relationship, collection])
 
@@ -984,10 +983,12 @@ def create_rdftype_collection():
     # Configure vectorizer
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
+    client.collections.delete("Datatypes")
+
     logger.info("Creating collection")
     collection = client.collections.create(
             
-            name="RDFtypes",
+            name="Datatypes",
             
             description="Text2kg benchmark RDF_types",
             
@@ -1025,13 +1026,130 @@ def create_rdftype_collection():
     return {"ingested terms": 0}
 
 def fill_rdftype_copied_named_vectors():
-    all_objects = fetch_all_objects(collection="RDFtypes")
+    all_objects = fetch_all_objects(collection="Datatypes")
 
-    all_named_vectors = fetch_all_named_vectors(collection="RDFtypes")
-
+    all_named_vectors = fetch_all_named_vectors(collection="Datatypes")
+    
     uuid_to_nv_mappings = get_copied_named_vectors(all_objects, all_named_vectors)
     
-    fill_copied_named_vectors(uuid_to_nv_mappings, "RDFtypes")
+    fill_copied_named_vectors(uuid_to_nv_mappings, "Datatypes")
+
+def rdftype_collection_creation():
+    # Get ontology property data from endpoint
+    logger.info("Loading data")
+    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Datatypes")
+
+    ##print(ontologies)
+    # Mappings between mapping methodology names and functions
+    methodologies = {"Label": embed_using_label, "Description": embed_using_desc, "Superclass": embed_using_superclass}
+
+    # All combinations between models, methodologies and languages
+    all_combos = []
+    for model in models:
+        for method in methodologies:
+            for lang in languages:
+                all_combos.append({"case_name": f"{model}___{method}___{lang}","model": model, "method": method, "lang":lang})
+
+    formatted_objects_for_upload = []
+
+    # Formatting of the ontology data to upload to the collection
+    logger.info("Generating embeddings and formatting data")
+    for i, result_doc in enumerate(endpoint_query_results):
+        tp = len(endpoint_query_results) / 10
+        
+        if i % int(tp) == 0:
+            logger.info(i, "/", len(endpoint_query_results))
+            
+        formatted_object = {}
+        
+        uuid = generate_uuid5(result_doc.termIRI)
+        
+        #{"termIRI": "http:termIRI1", "type": "http:class", 
+        
+        formatted_object["TermIRI"] = result_doc.termIRI
+        formatted_object["Type"] = result_doc.rdfType
+        formatted_object["Ontology"] = result_doc.ontology
+        formatted_object["Label"] = result_doc.label
+        formatted_object["Description"] = result_doc.description
+        formatted_object["Superclass"] = result_doc.superclass
+        formatted_object["Language"] = result_doc.language
+        
+        if not result_doc.label:
+            if "#" in result_doc.termIRI:
+                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
+            elif "/" in result_doc.termIRI:
+                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
+        #print(formatted_object)
+        embeddings = {}
+        for case in all_combos:
+            name = case["case_name"]
+            model = case["model"]
+            method = case["method"]
+            case_lang = case["lang"]
+            if case_lang == result_doc.language:
+                
+                if not name in embeddings:
+                    embeddings[name] = []
+                
+                embeddings[name] = methodologies[method](result_doc, models[model])
+                
+        formatted_objects_for_upload.append([formatted_object, embeddings, uuid])
+
+    # Configurations for custom vectorizers (one for every case)
+    vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x["case_name"]) for x in all_combos]
+    
+    # TODO: modify above so some uri for "special models" 
+
+    # Delete the last iteration of the collection (for testing purposes)
+    client.collections.delete("Datatypes")
+
+    # Create a new collection with the vectorizer configs
+    logger.info("Creating collection")
+    collection = client.collections.create(
+            name="Datatypes",
+            description="Text2kg benchmark RDF_types",
+            
+            vectorizer_config=vectorizer_config,
+
+            properties = [
+                wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
+                wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT), # 
+                wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT), # Some labels are inferred based on the IRI, TODO later
+                wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
+                wvc.config.Property(name="Superclass", data_type=wvc.config.DataType.TEXT_ARRAY),
+                wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
+                wvc.config.Property(name="Ontology", data_type=wvc.config.DataType.TEXT),
+            ],
+        )
+
+    
+    # # Upload the formatted_object data
+    logger.info("Uploading data")
+    objects_to_upload = []
+    for d in formatted_objects_for_upload:
+        objects_to_upload.append(wvc.data.DataObject(
+        properties=d[0],
+        vector=d[1],
+        uuid=d[2]
+        ))
+        
+    # for f in formatted_objects_for_upload:
+    #     print(f[0]["Label"])
+
+
+    batches = split_list(objects_to_upload, 4)
+
+    try:
+        for i, batch in enumerate(batches):
+            logger.info(f"Uploading batch {i+1}")
+            # Perform the insert operation
+            #collection.data.insert_many(objects_to_upload)
+            collection.data.insert_many(batch)
+
+    except Exception as e:
+        logging.error(e)
+
+
 
 # Ontology Collection Functions
 def get_ontology_collection_mappings():
