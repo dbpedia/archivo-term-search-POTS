@@ -1,0 +1,580 @@
+import os
+import requests
+import json
+from SPARQLWrapper import SPARQLWrapper, JSON
+from dataclasses import dataclass, field
+from typing import List
+
+def generate_empty_embedding(model):
+    return model.embed_query("")
+
+def split_list(lst, n):
+    k, m = divmod(len(lst), n)
+    return [lst[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(n)]
+
+def read_file(filename):
+    with open(filename, "r") as f:
+        return f.read()
+
+#######################################
+# SPARQL RESULT FUNCTIONS AND CLASSES #
+#######################################
+
+# Gets data from the sparql endpoint
+def fetch_data_from_endpoint(url_endpoint, type="object_properties"):
+    func_dict = {
+        "DataProperties": get_data_properties,
+        "ObjectProperties": get_object_properties,
+        "Classes": get_classes,
+        "Individuals": get_individuals,
+        "RDFtypes": get_rdf_datatypes,
+        "Ontologies": get_ontologies
+    }
+    # Results come in the format [Term, Label, Description, Domain, Range, Language]
+    # Results are "None", when applicable, except Label, where it will try to create one
+    return func_dict[type](url_endpoint)
+
+# Base SPARQL result class
+@dataclass
+class ResultDocument:
+    termIRI: str = "None"
+    rdfType: str = "None"
+    description: str = "None"
+    language: str = "None"
+    ontology: str = "None"
+    label_none: List[str] = field(default_factory=list)
+    def __str__(self):
+        # Create a formatted string of all attributes
+        attributes = ', '.join(f"{key}={value}" for key, value in self.__dict__.items())
+        return f"{type(self).__name__}({attributes})"
+
+# Individual class inheriting from ResultDocument
+@dataclass
+class Individual(ResultDocument):
+    domain: List[str] = field(default_factory=list)
+    range: List[str] = field(default_factory=list)
+
+# Class class inheriting from ResultDocument
+@dataclass
+class Class(ResultDocument):
+    subclass: List[str] = field(default_factory=list)
+    superclass: List[str] = field(default_factory=list)
+
+# DatatypeProperty class inheriting from ResultDocument
+@dataclass
+class DatatypeProperty(ResultDocument):
+    subProperty : List[str] = field(default_factory=list)
+    superProperty  : List[str] = field(default_factory=list)
+    domain: List[str] = field(default_factory=list)
+    range: List[str] = field(default_factory=list)
+
+# ObjectProperty class inheriting from ResultDocument
+@dataclass
+class ObjectProperty(ResultDocument):
+    subProperty : List[str] = field(default_factory=list)
+    superProperty : List[str] = field(default_factory=list)
+    domain: List[str] = field(default_factory=list)
+    range: List[str] = field(default_factory=list)
+
+# RDFType class inheriting from ResultDocument
+@dataclass
+class RDFType(ResultDocument):
+    superclass: List[str] = field(default_factory=list)
+
+# Ontology class
+@dataclass
+class Ontology:
+    ontologyIRI: str = "None"
+    classes: List[str] = field(default_factory=list)
+    dataproperties: List[str] = field(default_factory=list)
+    language: str = "None"
+
+########################
+# COLLECTION FUNCTIONS #
+########################
+
+def get_data_properties(url_endpoint):
+
+    query = read_file("sparql_queries/data_properties.sparql")
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()["results"]["bindings"]
+    all_data = []
+    for r in results:
+        doc = DatatypeProperty()
+        doc.termIRI = r["term"]["value"]
+
+        if "label" in r.keys():
+            if "xml:lang" in r["label"].keys():
+                doc.language = r["label"]["xml:lang"]
+            doc.label = r["label"]["value"]
+        if "domains" in r.keys():
+            doc.domain = r["domains"]["value"].split(", ")
+        if "ranges" in r.keys():
+            doc.range = r["ranges"]["value"].split(", ")
+        if "description" in r.keys():
+            if "xml:lang" in r["description"].keys():
+                doc.language = r["description"]["xml:lang"]
+            doc.description = r["description"]["value"]
+        if "ontology" in r.keys():
+            doc.ontology = r["ontology"]["value"]
+            if "cenguix" in doc.ontology:
+                doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+            elif "http" in doc.ontology:
+                doc.ontology = doc.ontology.replace("http://", "") 
+                
+        
+        all_data.append(doc)
+        
+    return all_data
+
+def get_object_properties(url_endpoint):
+    query = read_file("sparql_queries/object_properties.sparql")
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()["results"]["bindings"]
+  
+    all_data = {}
+    for r in results:
+        doc = ObjectProperty()
+        doc.termIRI = r["term"]["value"]
+
+        if doc.termIRI in all_data:
+            if "label" in r.keys():
+                if "xml:lang" in r["label"].keys():
+                    
+                    if hasattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}'):
+
+                        getattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
+                    else:
+                        setattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+        
+        
+        else:
+            if "label" in r.keys():
+                if "xml:lang" in r["label"].keys():
+
+                    if hasattr(doc, f'label_{r["label"]["xml:lang"]}'):
+                        getattr(doc, f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
+                    else:
+                        setattr(doc, f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+
+                else:
+                    doc.label_none.append(r["label"]["value"])
+            if "domains" in r.keys():
+                doc.domain = r["domains"]["value"].split(", ")
+            if "ranges" in r.keys():
+                doc.range = r["ranges"]["value"].split(", ")
+            if "description" in r.keys():
+                if "xml:lang" in r["description"].keys():
+                    doc.language = r["description"]["xml:lang"]
+                doc.description = r["description"]["value"]
+            if "ontology" in r.keys():
+                doc.ontology = r["ontology"]["value"]
+                if "cenguix" in doc.ontology:
+                    doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+
+                elif "http" in doc.ontology:
+                    doc.ontology = doc.ontology.replace("http://", "") 
+                    
+            
+            all_data[doc.termIRI] = doc
+        
+    return list(all_data.values())
+
+def get_classes(url_endpoint):
+    query = read_file("sparql_queries/classes.sparql")
+    
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()["results"]["bindings"]
+    print(results)
+    all_data = {}
+    for r in results:
+        print(r)
+        doc = Class()
+        doc.termIRI = r["term"]["value"]
+        if doc.termIRI in all_data:
+            if "labels" in r.keys():
+                print(r["labels"])
+                if "xml:lang" in r["label"].keys():
+                    
+                    if hasattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}'):
+
+                        getattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
+                    else:
+                        setattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+        else:
+            if "label" in r.keys():
+                if "xml:lang" in r["label"].keys():
+
+                    if hasattr(doc, f'label_{r["label"]["xml:lang"]}'):
+                        getattr(doc, f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
+                    else:
+                        setattr(doc, f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+
+                else:
+                    doc.label_none.append(r["label"]["value"])
+            if "subclasses" in r.keys():
+                doc.subclass = r["subclasses"]["value"].split(", ")
+            if "superclasses" in r.keys():
+                doc.superclass = r["superclasses"]["value"].split(", ")
+            if "description" in r.keys():
+                if "xml:lang" in r["description"].keys():
+                    doc.language = r["description"]["xml:lang"]
+                doc.description = r["description"]["value"]
+            if "ontology" in r.keys():
+                doc.ontology = r["ontology"]["value"]
+                if "cenguix" in doc.ontology:
+                    doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+                elif "http" in doc.ontology:
+                    doc.ontology = doc.ontology.replace("http://", "") 
+                    
+            all_data[doc.termIRI] = doc
+
+    return list(all_data.values())
+
+def get_individuals(url_endpoint):
+    query = read_file("sparql_queries/individuals.sparql")
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()["results"]["bindings"]
+    all_data = []
+    for r in results:
+        doc = Individual()
+        doc.termIRI = r["term"]["value"]
+
+        if "label" in r.keys():
+            if "xml:lang" in r["label"].keys():
+                doc.language = r["label"]["xml:lang"]
+            doc.label = r["label"]["value"]
+
+
+        if "domains" in r.keys():
+            doc.domain = r["domains"]["value"].split(", ")
+        if "ranges" in r.keys():
+            doc.range = r["ranges"]["value"].split(", ")
+        if "description" in r.keys():
+            if "xml:lang" in r["description"].keys():
+                doc.language = r["description"]["xml:lang"]
+            doc.description = r["description"]["value"]
+        if "ontology" in r.keys():
+            doc.ontology = r["ontology"]["value"]
+            if "cenguix" in doc.ontology:
+                doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+
+            elif "http" in doc.ontology:
+                doc.ontology = doc.ontology.replace("http://", "") 
+                
+        all_data.append(doc)
+        
+    return all_data
+
+def get_rdf_datatypes(url_endpoint):
+
+    query = read_file("sparql_queries/rdf_datatypes.sparql")
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()["results"]["bindings"]
+    all_data = []
+    for r in results:
+        doc = RDFType()
+        doc.termIRI = r["term"]["value"]
+
+        if "label" in r.keys():
+            if "xml:lang" in r["label"].keys():
+                doc.language = r["label"]["xml:lang"]
+            doc.label = r["label"]["value"]
+
+        if "superclass" in r.keys():
+            doc.superclass = r["superclass"]["value"].split(", ")
+        if "description" in r.keys():
+            if "xml:lang" in r["description"].keys():
+                doc.language = r["description"]["xml:lang"]
+            doc.description = r["description"]["value"]
+        if "ontology" in r.keys():
+            doc.ontology = r["ontology"]["value"]
+            if "cenguix" in doc.ontology:
+                doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+
+            elif "http" in doc.ontology:
+                doc.ontology = doc.ontology.replace("http://", "") 
+                
+        all_data.append(doc)
+        
+    return all_data
+
+def get_ontology_names(url_endpoint):
+    query = """SELECT DISTINCT ?graph
+    WHERE {
+    GRAPH ?graph {
+        ?s ?p ?o.
+    }
+    }
+    """
+   
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+    #print(results["results"])
+    all_ontologies = []
+    for r in results["results"]["bindings"]:
+        
+        full = r["graph"]["value"].split("/")[-1]
+        if ".ttl" in full and ("dbpedia" in full or "wikidata" in full):
+            full = full.replace(".ttl", "")
+            if "_number=" in full:
+                full = "_".join(full.split("_number=")[:-1])
+            full = full.split("_")[1].replace("domain=", "")
+            all_ontologies.append(full)
+            
+            
+    query2 = """
+    SELECT DISTINCT ?ontologyFile
+    WHERE {
+        ?ontologyFile a <http://www.w3.org/2002/07/owl#Ontology> .
+        OPTIONAL {
+            ?ontologyFile <http://www.w3.org/1999/02/22-rdf-syntax-ns#about> ?identifier .
+        }
+        OPTIONAL {
+            ?ontologyFile <http://www.w3.org/XML/1998/namespace#base> ?base .
+        }
+    }"""
+    sparql.setQuery(query2)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+    for r in results["results"]["bindings"]:
+        res = r["ontologyFile"]["value"]
+        if not "www" in res and not ".com" in res:
+            all_ontologies.append(res.replace("http://", "").replace(".owl", ""))
+    return all_ontologies
+
+def get_ontology_metadata(url_endpoint):
+    # Get title,
+    query = """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX dc: <http://purl.org/dc/elements/1.1/>
+        PREFIX dcterms: <http://purl.org/dc/terms/>
+        PREFIX dbo: <http://dbpedia.org/ontology/>
+        PREFIX dbp: <http://dbpedia.org/property/>
+        PREFIX terms: <http://purl.org/dc/terms/>
+
+        SELECT DISTINCT ?term 
+            (IF(BOUND(?label), ?label, STRAFTER(STR(?term), "#")) AS ?label) 
+            ?description ?ontologyNamespace
+        WHERE {
+            # Identifying the class
+            ?term a owl:Ontology.
+
+            # Attempting to retrieve the ontology URI from the class's base URI or RDF context 
+            BIND(IRI(REPLACE(STR(?term), "(#|/)[^#/]*$", "")) AS ?ontologyNamespace)
+
+            # Attempting to retrieve labels
+            OPTIONAL { ?term rdfs:label ?label . }
+            OPTIONAL { ?term foaf:name ?label . }
+            OPTIONAL { ?term skos:prefLabel ?label . }
+            OPTIONAL { ?term dc:title ?label . }
+            OPTIONAL { ?term dcterms:title ?label . }
+
+            # Attempting to retrieve description
+            OPTIONAL { ?term terms:description ?description . }
+            OPTIONAL { ?term rdfs:comment ?description . }
+            OPTIONAL { ?term dcterms:abstract ?description . }
+            
+            
+            
+        }
+        GROUP BY ?term ?label ?description ?ontologyNamespace
+        
+    """
+    # TODO: ?s -> ontologyIRI
+    # get title, description
+    
+    sparql = SPARQLWrapper(url_endpoint)
+    sparql.setQuery(query)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+    #print(results["results"])
+    all_ontologies = []
+    for r in results["results"]["bindings"]:
+        
+        full = r["graph"]["value"].split("/")[-1]
+        if ".ttl" in full and ("dbpedia" in full or "wikidata" in full):
+            full = full.replace(".ttl", "")
+            if "_number=" in full:
+                full = "_".join(full.split("_number=")[:-1])
+            full = full.split("_")[1].replace("domain=", "")
+            all_ontologies.append(full)
+            
+     
+    query2 = """
+    SELECT DISTINCT ?ontologyFile
+    WHERE {
+        ?ontologyFile a <http://www.w3.org/2002/07/owl#Ontology> .
+        OPTIONAL {
+            ?ontologyFile <http://www.w3.org/1999/02/22-rdf-syntax-ns#about> ?identifier .
+        }
+        OPTIONAL {
+            ?ontologyFile <http://www.w3.org/XML/1998/namespace#base> ?base .
+        }
+    }"""
+    sparql.setQuery(query2)
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+    res = [x["ontologyFile"]["value"] for x in results["results"]["bindings"]]
+    print("res", res)
+    return res
+
+def get_ontologies(url_endpoint):
+ 
+    # Helper function to run SPARQL queries
+    def run_sparql_query(query):
+        sparql = SPARQLWrapper(url_endpoint)
+        sparql.setQuery(query)
+        sparql.setReturnFormat(JSON)
+        return sparql.query().convert()["results"]["bindings"]
+
+    # Query to get details for each ontology
+    def get_ontology_details(ontology_iri):
+        print("Trying", ontology_iri)
+        query = f"""
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+            SELECT 
+                            ?dataproperty  
+                            ?class
+            WHERE {{
+                ?dataproperty a owl:DatatypeProperty .
+                ?class a owl:Class .
+                
+                FILTER(STRSTARTS(STR(?class), "{ontology_iri}"))
+                FILTER(STRSTARTS(STR(?dataproperty), "{ontology_iri}"))
+            }}
+
+        """
+
+
+        return run_sparql_query(query)
+
+    # Extract the meaningful attributes for each ontology
+    def extract_ontology_data(ontology_iri):
+        #print(ontology_iri)
+        ontology_details = get_ontology_details(ontology_iri)
+        # for x in ontology_details:
+        #     print(x)
+        if not ontology_details:
+            return None
+        
+        doc = Ontology()
+        doc.ontologyIRI = ontology_iri
+
+        # Extract label, description, version
+        
+        # doc.label = ontology_detail.get("label", {}).get("value", "")
+        # doc.description = ontology_detail.get("description", {}).get("value", "")
+        # doc.version = ontology_detail.get("version", {}).get("value", "")
+        doc.classes = list(set([x.get("class", {}).get("value", "") for x in ontology_details]))
+        doc.dataproperties = list(set([x.get("dataproperty", {}).get("value", "") for x in ontology_details]))
+        # doc.individualsCount = int(ontology_detail.get("individualCount", {}).get("value", 0))
+        #print(doc.classes)
+        return doc
+
+    # Get all ontology names
+    all_ontologies = get_ontology_iri(url_endpoint)
+
+    # Embed meaningful data for each ontology
+    all_ontology_data = []
+    for ontology_iri in all_ontologies:
+        ontology_data = extract_ontology_data(ontology_iri)
+        if ontology_data:
+            all_ontology_data.append(ontology_data)
+    
+    return all_ontology_data
+
+# Embeds using the label
+def embed_using_label(data, model, language):
+
+    formatted_str = f"{getattr(data, f'label_{language.lower()}')}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+    
+# Embeds using the description
+def embed_using_desc(data, model, language):
+
+    formatted_str = f"{getattr(data, f'description_{language.lower()}')}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the domain + range
+def embed_using_domain_plus_range(data, model):
+   
+    formatted_str = f"{data.domain} + {data.range}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the domain
+def embed_using_domain(data, model):
+    
+    formatted_str = f"{data.domain}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the range
+def embed_using_range(data, model):
+    
+    formatted_str = f"{data.range}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the subclass
+def embed_using_subclass(data, model):
+    
+    formatted_str = f"{data.subclass}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the superclass
+def embed_using_superclass(data, model):
+    
+    formatted_str = f"{data.superclass}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# Embeds using the subclass + superclass
+def embed_using_subclass_plus_superclass(data, model):
+    
+    formatted_str = f"{data.subclass} + {data.superclass}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+# TODO: FIX ONTOLOGY FUNCTIONS
+def embed_ontology_classes(data, model):
+    
+    formatted_str = f"{data.classes}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+def embed_ontology_dataproperties(data, model):
+    
+    formatted_str = f"{data.dataproperties}"
+    #print("Embedding", formatted_str)
+    return model.embed_query(formatted_str)
+
+    

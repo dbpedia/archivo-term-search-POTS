@@ -1,3 +1,6 @@
+
+# This script contains the main API for the DBpedia document ontology extraction system. It provides an endpoint for searching the Weaviate database based on fuzzy or exact filters.
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import traceback
@@ -41,7 +44,7 @@ with get_weaviate_client() as client:
     create_new = False
 
     # List of model names to use for embedding
-    models = ["LaBSE"]
+    models = ["paraphrase-multilingual-MiniLM-L12-v2"]
 
     # Mappings between model names (formatted to snake_case) and their corresponding SentenceTransformerEmbedding instances
     models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in models}
@@ -181,6 +184,9 @@ with get_weaviate_client() as client:
 
         # Perform the query without hybrid property
         if not hybrid_property:
+            with open("test2.txt", "w") as f:
+                f.write(str(named_vectors_to_search))
+
             results = collection.query.near_vector(
                     near_vector=named_vectors_to_search,
                     target_vector=target_vectors,
@@ -281,7 +287,7 @@ with get_weaviate_client() as client:
     def search_endpoint():
         try:
             data = request.json
-
+            print("Received:", data)
             # Validate filters in the request data
             is_valid, error_message = validate_filters(data)
             if not is_valid:

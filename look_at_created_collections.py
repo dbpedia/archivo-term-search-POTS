@@ -1,3 +1,6 @@
+
+# This script is used to look at the created collections in Weaviate
+
 import weaviate
 import weaviate.classes as wvc
 from weaviate.classes.query import Filter
