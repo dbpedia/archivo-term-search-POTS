@@ -18,7 +18,7 @@ services:
       WEAVIATE_API_URI: ${WEAVIATE_API_URI:-http://weaviate:8080}
       WEAVIATE_GRPC_URI: ${WEAVIATE_GRPC_URI:-http://weaviate:50051}
     command: >
-      /bin/bash -c "source activate onto_search_env && sleep 5 && python VectorDB_creation.py"
+      /bin/bash -c "source activate onto_search_env && sleep 5 && python VectorDB_creation_label_change.py"
 
   api:
     profiles: [serve-api]

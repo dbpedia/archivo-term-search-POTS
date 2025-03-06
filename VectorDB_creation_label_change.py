@@ -6,7 +6,7 @@ import weaviate.classes as wvc
 from weaviate.classes.query import Filter
 from weaviate.util import generate_uuid5
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-from VectorDB_creation_aux import *
+from VectorDB_creation_aux_label_change import *
 from dotenv import load_dotenv
 import os
 import sys
@@ -133,12 +133,13 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
 
         for vector in all_named_vectors:
             if "___CP_SEPARATOR___" in vector:
+                
+                
                 # Split the vector name to extract original and copy info
                 original_vector_info, copy_vector_info = vector.split("___CP_SEPARATOR___")
                 property_to_find, target_collection, index = copy_vector_info.split("___")
                 vectorizer = vector.split("___")[0]
                 prop = vector.split("___")[1]
-
                 # Initialize empty embeddings if they haven't been created yet
                 if vectorizer not in empty_embeddings:
                     empty_embeddings[vectorizer] = generate_empty_embedding(models[vectorizer])
@@ -150,17 +151,28 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
 
                     target_uri = formatted_object.properties[property_to_find][int(index)-1]
 
-                    # Query the collection for the named vector embedding
-                    result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info)
+                    
+                    # print("property to find is", property_to_find)
+                    # print("target collection is", target_collection)
+                    # print("index is", index)
+                    # print("vectorizer is", vectorizer)
+                    # print("prop is", prop)
+                    
+                    if target_uri != "":
+                        # Query the collection for the named vector embedding
+                        result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info)
+                        print("Looking for vector", vector)
+                        print("Current object is", formatted_object.properties)
+                        print("Fetched the", original_vector_info, "embedding from", target_uri, "(", target_collection, "collection )")
+                        print()
+                        if result:
+                            # Store the result in the embeddings dictionary
+                            embeddings[formatted_object.uuid][vector] = result
+    
 
-                    if result:
-                        # Store the result in the embeddings dictionary
-                        embeddings[formatted_object.uuid][vector] = result
- 
-
-                    else:
-                        # If the result is not found, use an empty embedding
-                        embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
+                        else:
+                            # If the result is not found, use an empty embedding
+                            embeddings[formatted_object.uuid][vector] = empty_embeddings[vectorizer]
 
                 else:
                     if empty_property_embedding_strategy == "empty":
@@ -190,6 +202,7 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
     return embeddings  # Return the mappings of UUIDs to named vector embeddings
 
 def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
+
     logger.info("Filling copied named vectors")
     collection = client.collections.get(name=target_collection)
 
@@ -241,7 +254,7 @@ def get_object_property_collection_mappings():
     return methodologies  # Return both models and methodologies
 
 def format_object_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
-    formatted_objects = []
+    formatted_objects = {}
     for i, result_doc in enumerate(endpoint_query_results):
         
         # Format each result document into a structured object
@@ -291,9 +304,14 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
 
         # Generate a UUID for the object
         uuid = generate_uuid5(result_doc.termIRI)
-        formatted_objects.append([formatted_object, embeddings, uuid])
+        if uuid in formatted_objects:
+            old_object = formatted_objects[uuid]
+            formatted_objects[uuid] = [old_object[0].update_info(result_doc), old_object[1] | embeddings, uuid]
+        else:
+            formatted_objects[uuid] = [formatted_object, embeddings, uuid]  # Append formatted data
+
     
-    return formatted_objects  # Return the list of formatted objects
+    return list(formatted_objects.values())  # Return the list of formatted objects
 
 def create_object_property_collection():
     logger.info("Creating ObjectProperties collection")
@@ -331,7 +349,7 @@ def create_object_property_collection():
     # Create a new collection with the specified properties and vectorizer config
     collection = client.collections.create(
         name="ObjectProperties",
-        description="Text2kg benchmark properties",
+        description="Text2kg benchmark object properties",
         vectorizer_config=vectorizer_config,
         properties=[
             wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
@@ -354,9 +372,16 @@ def create_object_property_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
         
         return {"uploaded": successes}
     except Exception as e:
@@ -395,7 +420,8 @@ def get_class_collection_mappings():
 
 def format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
     logger.info("Formatting objects")  # Indicate the start of formatting objects
-    formatted_objects = []  # List to hold the formatted objects
+    formatted_objects = {}  # List to hold the formatted objects
+
     for i, result_doc in enumerate(endpoint_query_results):
         # Create a dictionary to store properties of the class
         formatted_object = {
@@ -408,6 +434,7 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
             
         }
         
+        # Dynamically add label properties to the formatted object
         for attr in dir(result_doc):
             if attr.startswith("label"):
                 formatted_object[attr] = getattr(result_doc, attr)
@@ -420,7 +447,7 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
                     formatted_object["label_none"] = [result_doc.termIRI.split("#")[1]]
                 elif "/" in result_doc.termIRI:
                     formatted_object["label_none"] = [result_doc.termIRI.split("/")[1]]
-        print("Result doc is", result_doc)
+        print("Line from query is", result_doc)
         embeddings = {}  # Dictionary to hold embeddings for the object
         for vector in all_named_vectors:
             # Skip vectors with copy separator as they are handled elsewhere
@@ -428,15 +455,13 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
                 model = vector.vectorizer
                 field_name = vector.field_name
                 case_lang = vector.language
-
-               
                 
                 # Generate embeddings only if the language matches
                 if field_name in ["Label", "Description"]:
                     doc_has_field_in_wanted_language = hasattr(result_doc, f"{field_name.lower()}_{case_lang.lower()}")
                     if doc_has_field_in_wanted_language:
                         
-                        if not case_lang == "None":
+                        if case_lang != "None":
                             print("Putting", field_name, "in",vector.name) 
                             embeddings[vector.name] = methodologies[field_name](result_doc, models[model], case_lang)
                         else:
@@ -450,16 +475,24 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
 
         # Generate a UUID for the object based on its TermIRI
         uuid = generate_uuid5(result_doc.termIRI)
-        formatted_objects.append([formatted_object, embeddings, uuid])  # Append formatted data
-    
-    return formatted_objects  # Return the list of formatted objects
+        if uuid in formatted_objects:
+            old_object = formatted_objects[uuid]
+            formatted_objects[uuid] = [old_object[0].update_info(result_doc), old_object[1] | embeddings, uuid]
+        else:
+            formatted_objects[uuid] = [formatted_object, embeddings, uuid]  # Append formatted data
+
+    return list(formatted_objects.values())  # Return the list of formatted objects
 
 def create_class_collection():
     logger.info("Creating class collection")  # Indicate the start of collection creation
     logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for Classes
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="Classes")
-    
+    print("ENDPOINT QUERY RESULTS:")
+    for result_doc in endpoint_query_results:
+        for attr in dir(result_doc):
+                if attr.startswith("label"):
+                    print("FOUND attr", attr, "in", result_doc)
     # Get the models and methodologies for embedding
     methodologies = get_class_collection_mappings()
 
@@ -480,7 +513,7 @@ def create_class_collection():
     print("Formatting results for upload")
     # Format objects for upload
     formatted_objects_for_upload = format_class_query_results(endpoint_query_results, methodologies, models, all_named_vectors)
-
+    print("outside", [x[0] for x in formatted_objects_for_upload])
     # Configure vectorizer for the named vectors
     vectorizer_config = [wvc.config.Configure.NamedVectors.none(name=x.name) for x in all_named_vectors]
 
@@ -511,9 +544,16 @@ def create_class_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
         
         return {"uploaded": successes}
     except Exception as e:
@@ -638,9 +678,16 @@ def class_collection_creation_hf_integration():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
         
         return {"uploaded": successes}
     except Exception as e:
@@ -760,9 +807,16 @@ def create_individuals_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
         
         return {"uploaded": successes}
     except Exception as e:
@@ -795,53 +849,83 @@ def get_data_property_collection_mappings():
     return methodologies  # Return both models and methodologies
 
 def format_data_property_query_results(endpoint_query_results, methodologies, models, all_named_vectors):
-    formatted_objects = []  # List to hold formatted data property objects
+    formatted_objects = {}
     for i, result_doc in enumerate(endpoint_query_results):
-        # Create a dictionary to store properties of the data property
+        
+        # Format each result document into a structured object
         formatted_object = {
             "TermIRI": result_doc.termIRI,
             "RDF_type": result_doc.rdfType,
             "Ontology": result_doc.ontology,
-            "Label": result_doc.label,
             "Description": result_doc.description,
             "Domain": result_doc.domain,
             "Range": result_doc.range,
-            "Language": result_doc.language
         }
-
+        
+        for attr in dir(result_doc):
+            if attr.startswith("label"):
+                formatted_object[attr] = getattr(result_doc, attr)
+                
         # Infer the label from TermIRI if it's not provided
-        if not result_doc.label:
+        if len(result_doc.label_none) == 0:
             
-            # TODO: Make this configurable
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
+            if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
+                if "#" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("#")[1]]
+                elif "/" in result_doc.termIRI:
+                    formatted_object["label_none"] = [result_doc.termIRI.split("/")[1]]
 
-        embeddings = {}  # Dictionary to hold embeddings for the data property
+        embeddings = {}  # Dictionary to hold embeddings for the object
         for vector in all_named_vectors:
             # Skip vectors with copy separator as they are handled elsewhere
             if "___CP_SEPARATOR___" not in vector.name:
                 model = vector.vectorizer
                 field_name = vector.field_name
                 case_lang = vector.language
-            
-                # Generate embeddings only if the language matches
-                if case_lang == result_doc.language:
-                    embeddings[vector.name] = methodologies[field_name](result_doc, models[model])
 
-        # Generate a UUID for the data property based on its TermIRI
+               
+                
+                # Generate embeddings only if the language matches
+                if field_name in ["Label", "Description"]:
+                    doc_has_field_in_wanted_language = hasattr(result_doc, f"{field_name.lower()}_{case_lang.lower()}")
+                    if doc_has_field_in_wanted_language:
+                        
+                        embeddings[vector.name] = methodologies[field_name](result_doc, models[model], case_lang)
+                    
+                else:
+                    
+                    embeddings[vector.name] = methodologies[field_name](result_doc, models[model])
+          
+
+        # Generate a UUID for the object
         uuid = generate_uuid5(result_doc.termIRI)
-        formatted_objects.append([formatted_object, embeddings, uuid])  # Append formatted data
+                
+        if uuid in formatted_objects:
+            old_object = formatted_objects[uuid]
+            formatted_objects[uuid] = [old_object[0].update_info(result_doc), old_object[1] | embeddings, uuid]
+        else:
+            formatted_objects[uuid] = [formatted_object, embeddings, uuid]  # Append formatted data
+
     
-    return formatted_objects  # Return the list of formatted objects
+    return list(formatted_objects.values())  # Return the list of formatted objects
+
+def Vectorless(obj):
+    # Get the object's properties and values as a dictionary
+    properties = vars(obj)
+    
+    # Filter out the 'vector' property
+    filtered_properties = {key: value for key, value in properties.items() if key != 'vector'}
+    
+    # Convert the filtered properties to a string
+    return ", ".join(f"{key}: {value}" for key, value in filtered_properties.items())
+
 
 def create_data_property_collection():
     logger.info("Creating DataProperties collection")  # Indicate the start of collection creation
     logger.info("Fetching SPARQL endpoint query results")
     # Fetch data from the endpoint for DataProperties
     endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="DataProperties")
-
+    
     # Get the models and methodologies for embedding
     methodologies = get_data_property_collection_mappings()
 
@@ -893,9 +977,16 @@ def create_data_property_collection():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
         
         return {"uploaded": successes}
     except Exception as e:
@@ -1015,9 +1106,16 @@ def create_rdftype_collection():
         try:
             successes = 0
             for i, batch in enumerate(batches):
-                logger.info("Uploading batch %d", i + 1)
-                collection.data.insert_many(batch)
-                successes += len(batch)
+                logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+                result = collection.data.insert_many(batch)  # Insert batch
+                inserted_docs = batch  # The original batch contains the inserted documents
+                successes += len(inserted_docs)  # Count successfully inserted documents
+
+                logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+            logger.info("Total successfully inserted documents: %d", successes)
+
             
             return {"uploaded": successes}
         except Exception as e:
@@ -1135,11 +1233,16 @@ def ontology_collection_creation():
     try:
         successes = 0
         for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d", i + 1)
-            collection.data.insert_many(batch)
-            successes += len(batch)
-        
-        return {"uploaded": successes}
+            logger.info("Uploading batch %d to %s", i + 1, collection.name)
+
+            result = collection.data.insert_many(batch)  # Insert batch
+            inserted_docs = batch  # The original batch contains the inserted documents
+            successes += len(inserted_docs)  # Count successfully inserted documents
+
+            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
+
+        logger.info("Total successfully inserted documents: %d", successes)
+
     except Exception as e:
         logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
         exception_happened = True
@@ -1215,26 +1318,26 @@ if __name__ == "__main__":
                 individuals_stats = "N/A"
                 ontology_stats = "N/A"
                 
-                # Create stats for each collection
-                #object_property_stats = create_object_property_collection()
-                # data_property_stats = create_data_property_collection()
+                # # Create stats for each collection
+                object_property_stats = create_object_property_collection()
+                data_property_stats = create_data_property_collection()
                 class_stats = create_class_collection()
                 # rdftype_stats = create_rdftype_collection()
-                # individuals_stats = create_individuals_collection()
+                #individuals_stats = create_individuals_collection()
 
                 # # Fill in copied named vectors
-                # fill_object_property_copied_named_vectors()
-                # fill_data_property_copied_named_vectors()
-                #fill_class_copied_named_vectors()
+                fill_object_property_copied_named_vectors()
+                fill_data_property_copied_named_vectors()
+                fill_class_copied_named_vectors()
                 # fill_rdftype_copied_named_vectors()
                 # fill_individuals_copied_named_vectors()
 
                 # Collect collection statuses
                 status_data = [
-                    get_collection_status("Object Property", object_property_stats),
-                    get_collection_status("Data Property", data_property_stats),
-                    get_collection_status("Class", class_stats),
-                    get_collection_status("RDFType", rdftype_stats),
+                    get_collection_status("Object Properties", object_property_stats),
+                    get_collection_status("Data Properties", data_property_stats),
+                    get_collection_status("Classes", class_stats),
+                    get_collection_status("RDFTypes", rdftype_stats),
                     get_collection_status("Individuals", individuals_stats)
                 ]
 

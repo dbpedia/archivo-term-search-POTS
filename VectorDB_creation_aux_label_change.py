@@ -48,6 +48,13 @@ class ResultDocument:
         attributes = ', '.join(f"{key}={value}" for key, value in self.__dict__.items())
         return f"{type(self).__name__}({attributes})"
 
+    def update_info(self, new_obj):
+        # For every property in the new object, update the current object
+        for key, value in new_obj.__dict__.items():
+
+            setattr(self, key, value)
+        return self
+        
 # Individual class inheriting from ResultDocument
 @dataclass
 class Individual(ResultDocument):
@@ -60,6 +67,11 @@ class Class(ResultDocument):
     subclass: List[str] = field(default_factory=list)
     superclass: List[str] = field(default_factory=list)
 
+    
+    def __str__(self):
+        # Create a formatted string of all attributes
+        attributes = ', '.join(f"{key}={value}" for key, value in self.__dict__.items())
+        return f"{type(self).__name__}({attributes})"
 # DatatypeProperty class inheriting from ResultDocument
 @dataclass
 class DatatypeProperty(ResultDocument):
@@ -101,34 +113,32 @@ def get_data_properties(url_endpoint):
     
     sparql.setReturnFormat(JSON)
     results = sparql.query().convert()["results"]["bindings"]
-    all_data = []
+    all_data = {}
     for r in results:
         doc = DatatypeProperty()
         doc.termIRI = r["term"]["value"]
 
-        if "label" in r.keys():
-            if "xml:lang" in r["label"].keys():
-                doc.language = r["label"]["xml:lang"]
-            doc.label = r["label"]["value"]
-        if "domains" in r.keys():
-            doc.domain = r["domains"]["value"].split(", ")
-        if "ranges" in r.keys():
-            doc.range = r["ranges"]["value"].split(", ")
-        if "description" in r.keys():
-            if "xml:lang" in r["description"].keys():
-                doc.language = r["description"]["xml:lang"]
-            doc.description = r["description"]["value"]
-        if "ontology" in r.keys():
-            doc.ontology = r["ontology"]["value"]
-            if "cenguix" in doc.ontology:
-                doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
-            elif "http" in doc.ontology:
-                doc.ontology = doc.ontology.replace("http://", "") 
-                
+        if doc.termIRI in all_data:
+            target_doc = all_data[doc.termIRI]
+        else:
+            target_doc = doc
+
+        if "label" in r:
+            if "xml:lang" in r["label"]:
+                lang_key = f'label_{r["label"]["xml:lang"]}'
+            else:
+                lang_key = "label_none"
+
+            if not hasattr(target_doc, lang_key):
+                setattr(target_doc, lang_key, [])
+
+            getattr(target_doc, lang_key).append(r["label"]["value"])
+
+        # If doc is new, store it in all_data
+        if doc.termIRI not in all_data:
+            all_data[doc.termIRI] = doc
         
-        all_data.append(doc)
-        
-    return all_data
+    return list(all_data.values())
 
 def get_object_properties(url_endpoint):
     query = read_file("sparql_queries/object_properties.sparql")
@@ -144,45 +154,25 @@ def get_object_properties(url_endpoint):
         doc.termIRI = r["term"]["value"]
 
         if doc.termIRI in all_data:
-            if "label" in r.keys():
-                if "xml:lang" in r["label"].keys():
-                    
-                    if hasattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}'):
-
-                        getattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
-                    else:
-                        setattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
-        
-        
+            target_doc = all_data[doc.termIRI]
         else:
-            if "label" in r.keys():
-                if "xml:lang" in r["label"].keys():
+            target_doc = doc
 
-                    if hasattr(doc, f'label_{r["label"]["xml:lang"]}'):
-                        getattr(doc, f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
-                    else:
-                        setattr(doc, f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+        if "label" in r:
+            if "xml:lang" in r["label"]:
+                lang_key = f'label_{r["label"]["xml:lang"]}'
+            else:
+                lang_key = "label_none"
 
-                else:
-                    doc.label_none.append(r["label"]["value"])
-            if "domains" in r.keys():
-                doc.domain = r["domains"]["value"].split(", ")
-            if "ranges" in r.keys():
-                doc.range = r["ranges"]["value"].split(", ")
-            if "description" in r.keys():
-                if "xml:lang" in r["description"].keys():
-                    doc.language = r["description"]["xml:lang"]
-                doc.description = r["description"]["value"]
-            if "ontology" in r.keys():
-                doc.ontology = r["ontology"]["value"]
-                if "cenguix" in doc.ontology:
-                    doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+            if not hasattr(target_doc, lang_key):
+                setattr(target_doc, lang_key, [])
 
-                elif "http" in doc.ontology:
-                    doc.ontology = doc.ontology.replace("http://", "") 
-                    
-            
+            getattr(target_doc, lang_key).append(r["label"]["value"])
+
+        # If doc is new, store it in all_data
+        if doc.termIRI not in all_data:
             all_data[doc.termIRI] = doc
+        
         
     return list(all_data.values())
 
@@ -194,49 +184,47 @@ def get_classes(url_endpoint):
     
     sparql.setReturnFormat(JSON)
     results = sparql.query().convert()["results"]["bindings"]
-    print(results)
+    
     all_data = {}
     for r in results:
-        print(r)
+
         doc = Class()
         doc.termIRI = r["term"]["value"]
+
         if doc.termIRI in all_data:
-            if "labels" in r.keys():
-                print(r["labels"])
-                if "xml:lang" in r["label"].keys():
-                    
-                    if hasattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}'):
-
-                        getattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
-                    else:
-                        setattr(all_data[doc.termIRI], f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+            target_doc = all_data[doc.termIRI]
         else:
-            if "label" in r.keys():
-                if "xml:lang" in r["label"].keys():
+            target_doc = doc
 
-                    if hasattr(doc, f'label_{r["label"]["xml:lang"]}'):
-                        getattr(doc, f'label_{r["label"]["xml:lang"]}').append(r["label"]["value"])
-                    else:
-                        setattr(doc, f'label_{r["label"]["xml:lang"]}', [r["label"]["value"]])
+        if "label" in r:
+            if "xml:lang" in r["label"]:
+                lang_key = f'label_{r["label"]["xml:lang"]}'
+            else:
+                lang_key = "label_none"
 
-                else:
-                    doc.label_none.append(r["label"]["value"])
-            if "subclasses" in r.keys():
-                doc.subclass = r["subclasses"]["value"].split(", ")
-            if "superclasses" in r.keys():
-                doc.superclass = r["superclasses"]["value"].split(", ")
-            if "description" in r.keys():
-                if "xml:lang" in r["description"].keys():
-                    doc.language = r["description"]["xml:lang"]
-                doc.description = r["description"]["value"]
-            if "ontology" in r.keys():
-                doc.ontology = r["ontology"]["value"]
-                if "cenguix" in doc.ontology:
-                    doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
-                elif "http" in doc.ontology:
-                    doc.ontology = doc.ontology.replace("http://", "") 
-                    
+            if not hasattr(target_doc, lang_key):
+                setattr(target_doc, lang_key, [])
+
+            getattr(target_doc, lang_key).append(r["label"]["value"])
+
+        # If doc is new, store it in all_data
+        if doc.termIRI not in all_data:
             all_data[doc.termIRI] = doc
+            
+        if "subclasses" in r.keys():
+            doc.subclass = r["subclasses"]["value"].split(", ")
+        if "superclasses" in r.keys():
+            doc.superclass = r["superclasses"]["value"].split(", ")
+        if "description" in r.keys():
+            doc.description = r["description"]["value"]
+        if "ontology" in r.keys():
+            doc.ontology = r["ontology"]["value"]
+            if "cenguix" in doc.ontology:
+                doc.ontology = doc.ontology.split("/relations")[0].split("_")[-1]
+            elif "http" in doc.ontology:
+                doc.ontology = doc.ontology.replace("http://", "") 
+                
+        
 
     return list(all_data.values())
 
