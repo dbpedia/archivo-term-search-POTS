@@ -44,13 +44,13 @@ with get_weaviate_client() as client:
     create_new = False
 
     # List of model names to use for embedding
-    models = ["paraphrase-multilingual-MiniLM-L12-v2"]
+    models = ["LaBSE"]
 
     # Mappings between model names (formatted to snake_case) and their corresponding SentenceTransformerEmbedding instances
     models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in models}
 
     # Collection names
-    collections = ['DataProperties', 'ObjectProperties', 'Classes', 'Individuals', 'RDFtypes']
+    collections = ['DataProperties', 'ObjectProperties', 'Classes']#, #'Individuals', 'RDFtypes']
 
     # Translation map for term types to collection name
     collections_translation = {
@@ -129,11 +129,32 @@ with get_weaviate_client() as client:
 
     # Function to query a collection with fuzzy filters and embeddings
     def query_collection(model_name, target_collection, signature_properties_to_consider, reference_properties_to_consider, hybrid_property, built_filters, desired_language, limit):
-        
+        print("Lmao")
         # Embed the query properties using the specified model
-        signature_property_embeddings = {x: models[model_name].embed_query(signature_properties_to_consider[x]) for x in signature_properties_to_consider}
-        reference_property_embeddings = {x: models[model_name].embed_query(reference_properties_to_consider[x]) for x in reference_properties_to_consider}
 
+        signature_property_embeddings = {
+            x: models[model_name].embed_query(signature_properties_to_consider[x])
+            for x in signature_properties_to_consider
+        }
+        reference_property_embeddings = {
+            x: models[model_name].embed_query(reference_properties_to_consider[x])
+            for x in reference_properties_to_consider
+        }
+        print("Looking for" + str(signature_property_embeddings) + str(reference_property_embeddings))
+
+        updated_signature_embeddings = {}
+        for x in signature_property_embeddings:
+            if x == "Label":
+                updated_signature_embeddings["Label" + "_" + desired_language] = signature_property_embeddings[x]
+        signature_property_embeddings.update(updated_signature_embeddings)
+
+        updated_reference_embeddings = {}
+        for x in reference_property_embeddings:
+            if x == "Label":
+                updated_reference_embeddings["Label" + "_" + desired_language] = reference_property_embeddings[x]
+        reference_property_embeddings.update(updated_reference_embeddings)
+        
+        
         translation = collections_translation[target_collection]
         collection_properties = [x.name[0].upper() + x.name[1:] for x in client.collections.get(name=translation).config.get().properties]
 
@@ -276,8 +297,10 @@ with get_weaviate_client() as client:
         # Decide whether to perform fuzzy or exact search
         if fuzzy_filters:
             hybrid_search_field = fuzzy_filters_config.get("hybrid_search_field")
+            print("Doing fuzzy search")
             results = fuzzy_search(fuzzy_filters, fuzzy_filters_config, exact_filters, hybrid_search_field, language, limit)
         else:
+            print("Doing exact search")
             results = pure_exact_search(exact_filters, limit)
 
         return results, 200
@@ -286,15 +309,20 @@ with get_weaviate_client() as client:
     @app.route('/search', methods=['POST'])
     def search_endpoint():
         try:
+            logger.info("Received search request")
+            
             data = request.json
             print("Received:", data)
             # Validate filters in the request data
             is_valid, error_message = validate_filters(data)
+            print("ERROR:", error_message)
             if not is_valid:
                 return jsonify({"error": error_message}), 400
             
             # Perform the search and return the results
             results, status_code = search(data)
+            print("RESULTS:", results)
+            print("STATUS CODE:", status_code)
             return jsonify(results), status_code
 
         except Exception as e:

@@ -16,13 +16,14 @@ api_endpoint = f"http://{api_hostname}/search"
 #"http://127.0.0.1:9090/search"
 
 # Define the model name
-model_name = "paraphrase-multilingual-MiniLM-L12-v2"
+model_name = "LaBSE"
 def perform_search_case(case_data, case_info, output_filename="search_results.txt"):
     print()
     print("--------------------------- QUERY ---------------------------")
     
     # Print the query parameters as a small table
     query_data = [[k, v] for k, v in case_data.items()]  # Create a list of query parameters
+    print(query_data)
     query_table = tabulate.tabulate(query_data, headers=["Query Parameter", "Value"], tablefmt="fancy_grid")
     
     headers = {
@@ -147,29 +148,29 @@ def custom_sort_key(element):
 
 
 
-case_info = "INVALID KEYS 1 (missing everything)"
+# case_info = "INVALID KEYS 1 (missing everything)"
 
-data = {
+# data = {
 
-}
-perform_search_case(data, case_info)
+# }
+# perform_search_case(data, case_info)
 
-case_info = "INVALID KEYS 2 (missing fuzzy_config)"
+# case_info = "INVALID KEYS 2 (missing fuzzy_config)"
 
-data = {
-    "fuzzy_filters": {"label": "parent"}
-}
-perform_search_case(data, case_info)
+# data = {
+#     "fuzzy_filters": {"label": "parent"}
+# }
+# perform_search_case(data, case_info)
 
 
-case_info = "INVALID KEYS 3 (searching for invalid property in collection)"
+# case_info = "INVALID KEYS 3 (searching for invalid property in collection)"
 
-data = {
-    "fuzzy_filters": {"label": "parent", "subclass": "male"},
-    "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
-    "exact_filters": {"termtype": "ObjectProperty"},
-}
-perform_search_case(data, case_info)
+# data = {
+#     "fuzzy_filters": {"label": "parent", "subclass": "male"},
+#     "fuzzy_filters_config": {"model_name": model_name, "lang": "en"},
+#     "exact_filters": {"termtype": "ObjectProperty"},
+# }
+# perform_search_case(data, case_info)
 
 case_info = "VALID 1 (simple fuzzy search)"
 data = {
