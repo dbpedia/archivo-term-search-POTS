@@ -64,7 +64,7 @@ model_names = ["LaBSE"] # GET EMBEDDED MODELS
 
 models = {x.replace("-", "_"): SentenceTransformerEmbeddings(model_name=x) for x in model_names}
 
-languages = ["en", "fr", "es", "pt", "None"]
+languages = ["en", "de", "ru", "fr", "es", "pt", "None"]
 
 # Generic Classes and Functions
 @dataclass
@@ -90,6 +90,8 @@ class VirtualNamedVectorEmbedding:
             return self.name == other.name
         return False
 
+def has_no_labels(result_doc):
+    return not any([getattr(result_doc, f"label_{lang.lower()}", None) for lang in languages])
 def create_named_vectors(item):
     # Unpack the input tuple into meaningful variable names
     field_name, language, vectorizer, embed_strategy, copy_relationship, copy_relationship_index = item
@@ -125,16 +127,16 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
     # Initialize dictionaries to hold embeddings and empty embeddings
     embeddings = {}
     empty_embeddings = {}
-
+    logging.info("Filling copied named vectors mark")
     for formatted_object in all_objects:
         # Ensure a dictionary exists for each object's UUID
         if formatted_object.uuid not in embeddings:
             embeddings[formatted_object.uuid] = {}
-
+        logging.info("Object is %s", formatted_object)
         for vector in all_named_vectors:
             if "___CP_SEPARATOR___" in vector:
                 
-                
+                logger.info("vector is %s", vector)
                 # Split the vector name to extract original and copy info
                 original_vector_info, copy_vector_info = vector.split("___CP_SEPARATOR___")
                 property_to_find, target_collection, index = copy_vector_info.split("___")
@@ -161,10 +163,9 @@ def get_copied_named_vectors(all_objects, all_named_vectors):
                     if target_uri != "":
                         # Query the collection for the named vector embedding
                         result = query_collection_for_NV_embedding(target_collection, target_uri, original_vector_info)
-                        print("Looking for vector", vector)
-                        print("Current object is", formatted_object.properties)
-                        print("Fetched the", original_vector_info, "embedding from", target_uri, "(", target_collection, "collection )")
-                        print()
+                        logger.info("Looking for vector: %s", vector)
+                        logger.info("Current object properties: %s", formatted_object.properties)
+                        logger.info("Fetched the %s embedding from %s (%s collection)", original_vector_info, target_uri, target_collection)
                         if result:
                             # Store the result in the embeddings dictionary
                             embeddings[formatted_object.uuid][vector] = result
@@ -205,13 +206,16 @@ def fill_copied_named_vectors(uuid_to_nv_mappings, target_collection):
 
     logger.info("Filling copied named vectors")
     collection = client.collections.get(name=target_collection)
-
+    
     # Calculate the progress interval for logging
     tp = max(len(uuid_to_nv_mappings) / 10, 1)
     for i, uuid in enumerate(uuid_to_nv_mappings):
         if i % int(tp) == 0:
             logger.info("%d / %d", i, len(uuid_to_nv_mappings))
+            logger.info(f"UUID IS {uuid}")
+            #logger.info(f"mappings are {uuid_to_nv_mappings[uuid]}")
         if uuid_to_nv_mappings[uuid]:
+
             # Update the collection with the vector mappings
             collection.data.update(uuid, vector=uuid_to_nv_mappings[uuid])
 
@@ -226,9 +230,11 @@ def query_collection_for_NV_embedding(target_collection, target_uri, target_name
     )
     
     if data_object:
-        # Return the specific named vector if it exists
-        return data_object.vector[target_named_vector]
-    
+        try:
+            # Return the specific named vector if it exists
+            return data_object.vector[target_named_vector]
+        except KeyError:
+            return None    
     return None  # Return None if the object is not found
 
 def fetch_all_objects(collection):
@@ -260,19 +266,21 @@ def format_object_property_query_results(endpoint_query_results, methodologies, 
         # Format each result document into a structured object
         formatted_object = {
             "TermIRI": result_doc.termIRI,
-            "RDF_type": result_doc.rdfType,
+          
             "Ontology": result_doc.ontology,
-            "Description": result_doc.description,
+
             "Domain": result_doc.domain,
             "Range": result_doc.range,
         }
-        
-        for attr in dir(result_doc):
-            if attr.startswith("label"):
-                formatted_object[attr] = getattr(result_doc, attr)
-                
+            # Add "label_BLANK" keys for each language in the languages list
+        for lang in languages:
+            label_key = f"label_{lang.lower()}"
+
+            formatted_object[label_key] = getattr(result_doc, label_key, None)   
+            desc_key = f"description_{lang.lower()}"
+            formatted_object[desc_key] = getattr(result_doc, desc_key, "")
         # Infer the label from TermIRI if it's not provided
-        if len(result_doc.label_none) == 0:
+        if has_no_labels(result_doc):
             
             if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
                 if "#" in result_doc.termIRI:
@@ -426,21 +434,26 @@ def format_class_query_results(endpoint_query_results, methodologies, models, al
         # Create a dictionary to store properties of the class
         formatted_object = {
             "TermIRI": result_doc.termIRI,
-            "RDF_type": result_doc.rdfType,
+          
             "Ontology": result_doc.ontology,
-            "Description": result_doc.description,
+            
             "Subclass": result_doc.subclass,
             "Superclass": result_doc.superclass,
             
         }
         
-        # Dynamically add label properties to the formatted object
-        for attr in dir(result_doc):
-            if attr.startswith("label"):
-                formatted_object[attr] = getattr(result_doc, attr)
-                
+
+        # Add "label_BLANK" keys for each language in the languages list
+        for lang in languages:
+            label_key = f"label_{lang.lower()}"
+
+            formatted_object[label_key] = getattr(result_doc, label_key, [])
+            
+            desc_key = f"description_{lang.lower()}"
+            formatted_object[desc_key] = getattr(result_doc, desc_key, "")
+            
         # Infer the label from TermIRI if it's not provided
-        if len(result_doc.label_none) == 0:
+        if has_no_labels(result_doc):
             
             if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
                 if "#" in result_doc.termIRI:
@@ -503,7 +516,7 @@ def create_class_collection():
             for model in models:
                 for copy_relationship, collection in [("Subclass", "Classes"), ("Superclass", "Classes")]:
                     all_combos.append([field_name, lang, model, "default", copy_relationship, collection])
-
+    logger.info(f"all combos are {all_combos}")  # Indicate the start of named vector creation
     # Create named vectors for all combinations
     all_named_vectors = []
     for item in all_combos:
@@ -573,129 +586,6 @@ def fill_class_copied_named_vectors():
     # Fill the copied named vectors in the collection
     fill_copied_named_vectors(uuid_to_nv_mappings, "Classes")
 
-def class_collection_creation_hf_integration():
-    # Get ontology class data from endpoint
-    logger.info("Loading data")  # Indicate the start of data loading
-    endpoint_query_results = fetch_data_from_endpoint(url_endpoint, type="classes")
-
-    # Define methodologies for embedding based on different fields
-    methodologies = {
-        "Label": embed_using_label,
-        "Description": embed_using_desc,
-        "Subclass": embed_using_subclass,
-        "Superclass": embed_using_superclass
-    }
-    
-    # Define a dataclass to represent named vector embeddings
-    @dataclass
-    class VirtualNamedVectorEmbedding: 
-        field_name: str = field(default_factory=str)  # Field name (e.g., "Label")
-        language: str = field(default_factory=str)  # Language of the embedding
-        vectorizer: str = field(default_factory=str)  # Name of the model used for embedding
-        embed_strategy: str = field(default_factory=str)  # Strategy for embedding (e.g., "default")
-        
-        # CopiedVectors
-        copy_relationship: str = field(default_factory=str)  # Relationship type (e.g., "Subclass")
-        copy_relationship_index: str = field(default_factory=str)  # Index of the relationship
-        
-        # Construct the name for the embedding
-        name = f"{vectorizer}___{field_name}___{language}___CP_SEPARATOR___{copy_relationship}___{copy_relationship_index}"
-    
-    all_named_vectors = []  # List to hold all named vector embeddings
-    # Create embeddings for different fields, languages, and models
-    for field_name in ["Label", "Description", "Subclass", "Superclass"]:
-        for lang in languages:
-            for model in models:
-                embed_strategy = methodologies[field_name]
-                for copy_relationship, collection in [("Domain", "Classes_hf")]:
-                    all_named_vectors.append(VirtualNamedVectorEmbedding(field_name, lang, model, embed_strategy, copy_relationship, collection))
-
-    formatted_objects_for_upload = []  # List to hold objects formatted for upload
-
-    # Formatting of the ontology data to upload to the collection
-    logger.info("Generating embeddings and formatting data")
-    for i, result_doc in enumerate(endpoint_query_results):
-        tp = max(len(endpoint_query_results) / 10, 1) # Progress tracker
-        
-        # Log progress every 10%
-        if i % int(tp) == 0:
-            logger.info("%d / %d", i, len(endpoint_query_results))
-            
-        formatted_object = {}  # Dictionary to hold formatted object properties
-
-        # Generate a UUID for the object based on its TermIRI
-        uuid = generate_uuid5(result_doc.termIRI)
-        formatted_object["TermIRI"] = result_doc.termIRI
-        formatted_object["RDF_type"] = result_doc.rdfType
-        formatted_object["Ontology"] = result_doc.ontology
-        formatted_object["Label"] = result_doc.label
-        formatted_object["Description"] = result_doc.description
-        formatted_object["Subclass"] = result_doc.subclass
-        formatted_object["Superclass"] = result_doc.superclass
-        formatted_object["Language"] = result_doc.language
-
-        # Infer the label from TermIRI if it's not provided
-        if not result_doc.label:
-            if "#" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("#")[1]
-            elif "/" in result_doc.termIRI:
-                formatted_object["Label"] = result_doc.termIRI.split("/")[1]
-                
-        formatted_objects_for_upload.append([formatted_object, uuid])  # Append formatted data
-
-    # Configure vectorizer for the named vectors
-    vectorizer_config = [wvc.config.Configure.NamedVectors.text2vec_huggingface(name=x.name, model=x.vectorizer, source_properties=x.field_name) for x in all_named_vectors] 
-
-    # Create a new collection with the vectorizer configs
-    logger.info("Creating collection")
-    collection = client.collections.create(
-        name="Classes_hf",
-        description="Text2kg benchmark classes",
-        vectorizer_config=vectorizer_config,
-        properties=[
-            wvc.config.Property(name="TermIRI", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="RDF_type", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Label", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Description", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Subclass", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Superclass", data_type=wvc.config.DataType.TEXT_ARRAY),
-            wvc.config.Property(name="Language", data_type=wvc.config.DataType.TEXT),
-            wvc.config.Property(name="Ontology", data_type=wvc.config.DataType.TEXT),
-        ],
-    )
-    
-    # Upload the formatted object data
-    logger.info("Uploading data")
-    objects_to_upload = []
-    for d in formatted_objects_for_upload:
-        objects_to_upload.append(wvc.data.DataObject(
-            properties=d[0],
-            uuid=d[1]
-        ))
-
-    # Split objects into batches for uploading
-    batches = split_list(objects_to_upload, 4)
-    try:
-        successes = 0
-        for i, batch in enumerate(batches):
-            logger.info("Uploading batch %d to %s", i + 1, collection.name)
-
-            result = collection.data.insert_many(batch)  # Insert batch
-            inserted_docs = batch  # The original batch contains the inserted documents
-            successes += len(inserted_docs)  # Count successfully inserted documents
-
-            logger.info("Successfully inserted %d documents in batch %d: %s", len(inserted_docs), i + 1, [Vectorless(x) for x in inserted_docs])
-
-        logger.info("Total successfully inserted documents: %d", successes)
-
-        
-        return {"uploaded": successes}
-    except Exception as e:
-        logger.error("Error during insert_many: %s", traceback.format_exc(), exc_info=e)
-        exception_happened = True
-        
-        return {"error": True}
-
 # Individual Collection Functions
 
 def get_individuals_collection_mappings():
@@ -715,10 +605,10 @@ def format_individuals_query_results(endpoint_query_results, methodologies, mode
         # Create a dictionary to store properties of the individual
         formatted_object = {
             "TermIRI": result_doc.termIRI,
-            "RDF_type": result_doc.rdfType,
+
             "Ontology": result_doc.ontology,
             "Label": result_doc.label,
-            "Description": result_doc.description,
+
             "Domain": result_doc.domain,
             "Range": result_doc.range,
             "Language": result_doc.language
@@ -855,25 +745,31 @@ def format_data_property_query_results(endpoint_query_results, methodologies, mo
         # Format each result document into a structured object
         formatted_object = {
             "TermIRI": result_doc.termIRI,
-            "RDF_type": result_doc.rdfType,
+
             "Ontology": result_doc.ontology,
-            "Description": result_doc.description,
+
             "Domain": result_doc.domain,
             "Range": result_doc.range,
         }
         
-        for attr in dir(result_doc):
-            if attr.startswith("label"):
-                formatted_object[attr] = getattr(result_doc, attr)
-                
+        
+        # Add "label_BLANK" keys for each language in the languages list
+        for lang in languages:
+            label_key = f"label_{lang.lower()}"
+
+            formatted_object[label_key] = getattr(result_doc, label_key, [])
+            
+            desc_key = f"description_{lang.lower()}"
+            formatted_object[desc_key] = getattr(result_doc, desc_key, "")
         # Infer the label from TermIRI if it's not provided
-        if len(result_doc.label_none) == 0:
+        if has_no_labels(result_doc):
             
             if UNKNOWN_LABEL_REPLACEMENT_EMBEDDING_STRATEGY == "infer_on_iri":
                 if "#" in result_doc.termIRI:
                     formatted_object["label_none"] = [result_doc.termIRI.split("#")[1]]
                 elif "/" in result_doc.termIRI:
                     formatted_object["label_none"] = [result_doc.termIRI.split("/")[1]]
+
 
         embeddings = {}  # Dictionary to hold embeddings for the object
         for vector in all_named_vectors:
@@ -1025,8 +921,7 @@ def format_rdftype_query_results(endpoint_query_results, methodologies, models, 
         formatted_object = {
             "TermIRI": result_doc.termIRI,
             "Ontology": result_doc.ontology,
-            "Label": result_doc.label,
-            "Description": result_doc.description,
+
             "Superclass": result_doc.superclass,
             "Language": result_doc.language
         }

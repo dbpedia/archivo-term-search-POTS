@@ -122,17 +122,26 @@ def get_data_properties(url_endpoint):
             target_doc = all_data[doc.termIRI]
         else:
             target_doc = doc
+        for label_type in ["label", "prefLabel", "hiddenLabel"]:
+            if label_type in r:
+                if "xml:lang" in r[label_type]:
+                    lang_key = f"label_{r[label_type]['xml:lang']}"
+                else:
+                    lang_key = "label_none"
 
-        if "label" in r:
-            if "xml:lang" in r["label"]:
-                lang_key = f'label_{r["label"]["xml:lang"]}'
+                if not hasattr(target_doc, lang_key):
+                    setattr(target_doc, lang_key, [])
+
+                getattr(target_doc, lang_key).append(r[label_type]["value"])
+        if "description" in r:
+            if "xml:lang" in r["description"]:
+                lang_key = f'description_{r["description"]["xml:lang"]}'
             else:
-                lang_key = "label_none"
+                lang_key = "description_none"
 
             if not hasattr(target_doc, lang_key):
-                setattr(target_doc, lang_key, [])
+                setattr(target_doc, lang_key, "")
 
-            getattr(target_doc, lang_key).append(r["label"]["value"])
 
         # If doc is new, store it in all_data
         if doc.termIRI not in all_data:
@@ -158,16 +167,26 @@ def get_object_properties(url_endpoint):
         else:
             target_doc = doc
 
-        if "label" in r:
-            if "xml:lang" in r["label"]:
-                lang_key = f'label_{r["label"]["xml:lang"]}'
+        for label_type in ["label", "prefLabel", "hiddenLabel"]:
+            if label_type in r:
+                if "xml:lang" in r[label_type]:
+                    lang_key = f"label_{r[label_type]['xml:lang']}"
+                else:
+                    lang_key = "label_none"
+
+                if not hasattr(target_doc, lang_key):
+                    setattr(target_doc, lang_key, [])
+
+                getattr(target_doc, lang_key).append(r[label_type]["value"])
+        if "description" in r:
+            if "xml:lang" in r["description"]:
+                lang_key = f'description_{r["description"]["xml:lang"]}'
             else:
-                lang_key = "label_none"
+                lang_key = "description_none"
 
             if not hasattr(target_doc, lang_key):
-                setattr(target_doc, lang_key, [])
+                setattr(target_doc, lang_key, "")
 
-            getattr(target_doc, lang_key).append(r["label"]["value"])
 
         # If doc is new, store it in all_data
         if doc.termIRI not in all_data:
@@ -196,16 +215,27 @@ def get_classes(url_endpoint):
         else:
             target_doc = doc
 
-        if "label" in r:
-            if "xml:lang" in r["label"]:
-                lang_key = f'label_{r["label"]["xml:lang"]}'
+        for label_type in ["label", "prefLabel", "hiddenLabel"]:
+            if label_type in r:
+                if "xml:lang" in r[label_type]:
+                    lang_key = f"label_{r[label_type]['xml:lang']}"
+                else:
+                    lang_key = "label_none"
+
+                if not hasattr(target_doc, lang_key):
+                    setattr(target_doc, lang_key, [])
+
+                getattr(target_doc, lang_key).append(r[label_type]["value"])
+        
+        if "description" in r:
+            if "xml:lang" in r["description"]:
+                lang_key = f'description_{r["description"]["xml:lang"]}'
             else:
-                lang_key = "label_none"
+                lang_key = "description_none"
 
             if not hasattr(target_doc, lang_key):
-                setattr(target_doc, lang_key, [])
+                setattr(target_doc, lang_key, "")
 
-            getattr(target_doc, lang_key).append(r["label"]["value"])
 
         # If doc is new, store it in all_data
         if doc.termIRI not in all_data:
@@ -215,8 +245,7 @@ def get_classes(url_endpoint):
             doc.subclass = r["subclasses"]["value"].split(", ")
         if "superclasses" in r.keys():
             doc.superclass = r["superclasses"]["value"].split(", ")
-        if "description" in r.keys():
-            doc.description = r["description"]["value"]
+
         if "ontology" in r.keys():
             doc.ontology = r["ontology"]["value"]
             if "cenguix" in doc.ontology:
